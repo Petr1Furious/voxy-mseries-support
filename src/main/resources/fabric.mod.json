@@ -6,8 +6,8 @@
     "commit": "${commit}",
     "buildtime": "${buildtime}"
   },
-  "name": "Voxy",
-  "description": "Far distance rendering mod utilising LoDs",
+  "name": "Voxy Metal (Experimental, Unofficial)",
+  "description": "Experimental unofficial Minecraft 26.3 Apple Silicon Metal LOD renderer; not an official Voxy release",
   "authors": [
     "Cortex"
   ],

@@ -1,0 +1,72 @@
+[
+  {
+    "file": "LWJGL.txt",
+    "source": "https://github.com/LWJGL/lwjgl3/blob/3.4.3/LICENSE.md",
+    "git_blob": "a17ad0af9bd1978feb0b8d18be49b8c5ea4c1b26",
+    "sha256": "4c2f770897d0cfda4d9a65bb4d6d6983dccfd57d4c7eb74ea5ded0762cbc0e75"
+  },
+  {
+    "file": "LMDB.txt",
+    "source": "https://github.com/LWJGL/lwjgl3/blob/3.4.3/modules/lwjgl/lmdb/lmdb_license.txt",
+    "git_blob": "6295703c0a34f7021ddf93a37cd0b5008c796735",
+    "sha256": "3bbb1a49c318982a054416eeeee1c15c10666b44d7fcfa7455200836e2a0ee4f"
+  },
+  {
+    "file": "Zstandard.txt",
+    "source": "https://github.com/LWJGL/lwjgl3/blob/3.4.3/modules/lwjgl/zstd/zstd_license.txt",
+    "git_blob": "75800288cc243f164b9d130f125e2ffae28f8e39",
+    "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+  },
+  {
+    "file": "shaderc.txt",
+    "source": "https://github.com/LWJGL/lwjgl3/blob/3.4.3/modules/lwjgl/shaderc/shaderc_license.txt",
+    "git_blob": "f49a4e16e68b128803cc2dcea614603632b04eac",
+    "sha256": "43070e2d4e532684de521b885f385d0841030efa2b1a20bafb76133a5e1379c1"
+  },
+  {
+    "file": "Jedis.txt",
+    "source": "https://github.com/redis/jedis/blob/v5.1.0/LICENSE",
+    "git_blob": "15c4dd523aff73ec14b6d3f72d5874b16f232f58",
+    "sha256": "bce18846018d0abb9b4c9a3751755d36ae87de2f23872b8124a83321a86ed58f"
+  },
+  {
+    "file": "lz4-java.txt",
+    "source": "https://github.com/lz4/lz4-java/blob/1.8.0/LICENSE.txt",
+    "git_blob": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "file": "XZ.txt",
+    "source": "https://github.com/tukaani-project/xz-java/blob/v1.10/COPYING",
+    "git_blob": "16270b71eeedabf3fecb7b1d0795fa782fabea92",
+    "sha256": "1e77ef26cee5216d6531e49cbf2f6111a0270dc7b322fc65477063c5aff88766"
+  },
+  {
+    "file": "RocksDB-COPYING.txt",
+    "source": "https://github.com/facebook/rocksdb/blob/v10.2.1/COPYING",
+    "git_blob": "d159169d1050894d3ea3b98e1c965c4058208fe1",
+    "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+  },
+  {
+    "file": "RocksDB-Apache.txt",
+    "source": "https://github.com/facebook/rocksdb/blob/v10.2.1/LICENSE.Apache",
+    "git_blob": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "file": "RocksDB-LevelDB.txt",
+    "source": "https://github.com/facebook/rocksdb/blob/v10.2.1/LICENSE.leveldb",
+    "git_blob": "7108b0bfba7b77d75631baa6f559033e5b38add4",
+    "sha256": "b568f1f37a5a1d37a3e981e7c8b7fc4856ca33b2ca0a45bc8e847aaaf7afe485"
+  },
+  {
+    "file": "Commons-Pool-LICENSE.txt",
+    "source": "commons-pool2-2.12.0.jar!/META-INF/LICENSE.txt",
+    "sha256": "8f8441a968c10a65a27d75935cb16937775e2fcfc2d73066ca4b2ae9a6597b4f"
+  },
+  {
+    "file": "Commons-Pool-NOTICE.txt",
+    "source": "commons-pool2-2.12.0.jar!/META-INF/NOTICE.txt",
+    "sha256": "8842303d7eb3ab21179def02cbcf139dbf8f24ff5cf8b73d7cb54f78a79590f1"
+  }
+]

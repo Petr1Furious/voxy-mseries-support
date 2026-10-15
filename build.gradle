@@ -335,6 +335,9 @@ jar {
     from("LICENSE.md") {
         rename { "${it}_${project.archives_base_name}"}
     }
+    from('third-party') {
+        into 'META-INF/third-party'
+    }
 }
 
 
