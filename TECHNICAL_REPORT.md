@@ -31,6 +31,8 @@ Use macOS arm64, JDK 25, CMake 3.20+ and Xcode command-line tools. Gradle worker
 
 The audit preserves earlier ignored artifacts before moving aside native build state and rebuilding. JAR verification checks the root license, notice bundle, expanded Fabric metadata, exact embedded Metal dylib, Mach-O arm64 architecture and macOS arm64 shaderc/SPIRV-Cross/LMDB/Zstd/RocksDB JNI payloads. SHA-256 identifies the evaluated JAR; commit/timestamp metadata can make later rebuilds differ. Runtime LWJGL core/OpenGL/GLFW are supplied by Minecraft/Loom rather than all being nested in Voxy.
 
+Final local candidate: `voxy-metal-0.2.20-metal.26.3.experimental.1-6748c7c.jar`, built from `6748c7c10da1abaf436486efd75fa23abe028f2e`. Clean Java/JNI build and all 25 GPU/native tests passed with Metal API Validation; 34 Gradle tasks executed in 36s. All six required native payloads are arm64, root license/15 collected notice hashes match, and embedded JNI matches the fresh resource. SHA-256: `52b88918d3cfa8b52c4475d67340bd32ab42a6101008fed58098873f38dffd39`. This JAR remains local and is not cleared for redistribution because required notice completeness remains unresolved.
+
 ## Compatibility and limitations
 
 Development target: Minecraft 26.3, Fabric Loader 0.19.5, Fabric API 0.160.5+26.3, Sodium mc26.3-0.9.3-alpha.1-fabric, LWJGL 3.4.3, arm64 JDK 25. Current GPU validation host: Apple M3 / 8 GB / macOS 26.6 (25G72). No other Apple-chip/OS compatibility is established; macOS 12 is a deployment target, not a tested minimum.
