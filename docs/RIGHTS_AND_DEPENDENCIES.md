@@ -4,7 +4,7 @@ Review date: 2026-10-16. This is a local evidence review, not a grant of rights 
 
 ## Project rights
 
-The checked `LICENSE.md` blobs in upstream 26.3 and Metal fork `c544ee8d` retain the same notice: “All rights reserved. Do not redistribute.” The Fabric metadata declares All-Rights-Reserved. Imported native/GPU additions have no separately established permissive grant. Preserve the original notice and credits; obtain explicit permission from relevant rights holders covering contribution of modified sources/patches and any later binary distribution. Public visibility and GitHub fork ancestry do not establish that permission.
+The checked `LICENSE.md` blobs in upstream 26.3 and Metal fork `c544ee8d` retain the same notice: “All rights reserved. Do not redistribute.” The Fabric metadata declares All-Rights-Reserved. Imported native/GPU additions have no separately established permissive grant. The owner now reports that relevant rights holders have granted redistribution permissions covering this port. Preserve the original notice and credits; this report does not reproduce the agreement or infer a new license for recipients. Public visibility and GitHub fork ancestry do not establish that permission.
 
 The contribution fixes the missing root notice in local JARs: Gradle previously read nonexistent `LICENSE`; it now packages `LICENSE.md` as `LICENSE.md_voxy`. Its bytes were checked against the source. This correction does not resolve redistribution authorization.
 
@@ -34,7 +34,7 @@ Versions and bundle status below come from `build.gradle`, `gradle.properties`, 
 
 The tested artifact contains 18 nested JARs: five storage/support JARs (Jedis, Commons Pool, RocksDB JNI, lz4-java, XZ), twelve LWJGL JARs, and one generated `dummyprovider.jar` metadata shim. The shim is not Sodium's implementation. LWJGL LMDB/Zstd include Java plus macOS arm64/Linux x64/Windows x64 native variants; shaderc/spvc include Java plus macOS arm64 natives. Unused platform binaries and development/test classes remain packaging cleanup candidates.
 
-Only Commons Pool's nested JAR exposes standalone LICENSE/NOTICE entries by filename. Other JARs lacking such entries require a distribution notice bundle with exact upstream texts and native provenance. POM metadata alone is insufficient. No complete third-party notice bundle or redistribution clearance is claimed. No binaries were uploaded.
+Only Commons Pool's nested JAR exposes standalone LICENSE/NOTICE entries by filename. Other JARs lacking such entries require a distribution notice bundle with exact upstream texts and native provenance. POM metadata alone is insufficient. The current local packaging now includes verified notice files under `META-INF/third-party`, with provenance in `third-party/SOURCES.json`. This addresses the standalone files collected so far but does not establish complete native/transitive coverage. No binaries were uploaded.
 
 ## Source links
 
@@ -42,4 +42,10 @@ Only Commons Pool's nested JAR exposes standalone LICENSE/NOTICE entries by file
 - [Sodium license](https://github.com/CaffeineMC/sodium/blob/dev/LICENSE.md), [Chunky license](https://github.com/pop4959/Chunky/blob/master/LICENSE) (project pages checked during preparation; moving branches are not substitutes for exact artifact review).
 - [LWJGL](https://www.lwjgl.org/license), [shaderc](https://github.com/google/shaderc/blob/main/LICENSE), [SPIRV-Cross](https://github.com/KhronosGroup/SPIRV-Cross/blob/main/LICENSE), [LMDB](https://github.com/LMDB/lmdb/blob/mdb.master/libraries/liblmdb/LICENSE), [Zstandard](https://github.com/facebook/zstd/blob/dev/LICENSE).
 
-Recommendation: keep the branch local and experimental pending maintainer agreement and rights review. No license text was relaxed or replaced.
+Recommendation: keep the branch local and experimental while missing required third-party notices/native provenance remain unresolved. Owner-reported Voxy/Metal permissions are accepted separately from dependency obligations. No license text was relaxed or replaced.
+
+## Current release gate
+
+The original no-notices artifact findings above are historical baseline evidence. New local builds package collected texts for LWJGL, LMDB, Zstandard, shaderc, SPIRV-Cross, SPIRV-Tools, glslang, Jedis, Commons Pool, RocksDB/LevelDB, lz4-java and XZ. Exact sources and hashes are tracked. The actual macOS SPIRV-Cross binary embeds commit `6328376`; SPIRV-Tools embeds `b707790a`, and glslang identifies 16.4.0. Their corresponding texts were collected.
+
+Still unresolved: full compiler stack dependency/copyright coverage (including the precise SPIRV-Headers source revision and notices), and complete transitive native notices inside RocksDB/compression payloads. The optional direct GPL/LGPL integration questions remain documented above. A generic Apache/BSD text is not proof that all required third-party notices are retained. Under the owner's explicit release rules, this remains a publication blocker for the candidate.

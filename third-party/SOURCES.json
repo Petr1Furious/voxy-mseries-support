@@ -68,5 +68,23 @@
     "file": "Commons-Pool-NOTICE.txt",
     "source": "commons-pool2-2.12.0.jar!/META-INF/NOTICE.txt",
     "sha256": "8842303d7eb3ab21179def02cbcf139dbf8f24ff5cf8b73d7cb54f78a79590f1"
+  },
+  {
+    "file": "SPIRV-Cross.txt",
+    "source": "https://github.com/KhronosGroup/SPIRV-Cross/blob/6328376/LICENSE",
+    "git_blob": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "file": "SPIRV-Tools.txt",
+    "source": "https://github.com/KhronosGroup/SPIRV-Tools/blob/b707790a/LICENSE",
+    "git_blob": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "file": "glslang.txt",
+    "source": "https://github.com/KhronosGroup/glslang/blob/16.4.0/LICENSE.txt",
+    "git_blob": "1ea89c03d7d20e987481c7c56fac71831ba749cc",
+    "sha256": "17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677"
   }
 ]
