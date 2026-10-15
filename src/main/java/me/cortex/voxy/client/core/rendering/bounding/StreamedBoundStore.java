@@ -1,6 +1,8 @@
 package me.cortex.voxy.client.core.rendering.bounding;
 
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gpu.IGpuBuffer;
+import me.cortex.voxy.client.core.gpu.RenderBackend;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.common.util.UnsafeUtil;
@@ -11,11 +13,22 @@ import java.util.Arrays;
 // it renders an AABB around loaded chunks, thats it
 public final class StreamedBoundStore implements IBoundStore {
     private static final int INIT_MAX_CHUNK_COUNT = 1<<12;
-    private GlBuffer chunkPosBuffer = new GlBuffer(INIT_MAX_CHUNK_COUNT*8);//Stored as ivec2
+    private IGpuBuffer chunkPosBuffer; // Stored as ivec2
+    private final RenderBackend backend;
+    private final UploadStream uploads;
     private int count;//NOTE: count here is in INTS, not LONGS (i.e. 1 pos is 2 ints)
     private boolean didChange = false;
     private int[] visibleSections = new int[INIT_MAX_CHUNK_COUNT*2];
     public StreamedBoundStore() {
+        this.backend = null;
+        this.uploads = UploadStream.getInstance();
+        this.chunkPosBuffer = new GlBuffer(INIT_MAX_CHUNK_COUNT * 8L);
+    }
+
+    public StreamedBoundStore(RenderBackend backend, UploadStream uploads) {
+        this.backend = java.util.Objects.requireNonNull(backend);
+        this.uploads = java.util.Objects.requireNonNull(uploads);
+        this.chunkPosBuffer = backend.createBuffer(INIT_MAX_CHUNK_COUNT * 8L);
     }
 
     //Bind and render, changing as little gl state as possible so that the caller may configure how it wants to render
@@ -23,12 +36,15 @@ public final class StreamedBoundStore implements IBoundStore {
     public void preRender(Viewport<?> viewport) {
         if (this.count == 0 || !this.didChange) return;
         if (this.count*4L>this.chunkPosBuffer.size()) {
+            long size = ((long) Math.ceil(this.count * 1.25)) * 4;
+            IGpuBuffer replacement = this.backend == null ? new GlBuffer(size) : this.backend.createBuffer(size);
+            if (this.backend != null) this.backend.finish();
             this.chunkPosBuffer.free();
-            this.chunkPosBuffer = new GlBuffer(((long) Math.ceil(this.count*1.25))*4);
+            this.chunkPosBuffer = replacement;
         }
-        long addr = UploadStream.INSTANCE.upload(this.chunkPosBuffer, 0, this.count*4);
+        long addr = this.uploads.upload(this.chunkPosBuffer, 0, this.count*4);
         UnsafeUtil.memcpy(this.visibleSections, this.count, addr);
-        UploadStream.INSTANCE.commit();
+        this.uploads.commit();
         this.didChange = false;
     }
 
@@ -47,11 +63,12 @@ public final class StreamedBoundStore implements IBoundStore {
     }
 
     public void free() {
+        if (this.backend != null) this.backend.finish();
         this.chunkPosBuffer.free();
     }
 
     @Override
-    public GlBuffer getBuffer() {
+    public IGpuBuffer getBuffer() {
         return this.chunkPosBuffer;
     }
 

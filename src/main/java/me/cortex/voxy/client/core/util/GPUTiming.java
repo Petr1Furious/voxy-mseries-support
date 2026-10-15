@@ -194,7 +194,7 @@ public class GPUTiming {
         public void download(TimingDataConsumer consumer) {
             var meta = Arrays.copyOf(this.metadata, this.index);
             this.index = 0;
-            //DownloadStream.INSTANCE.download(this.store, buffer->consumer.accept(meta, buffer));
+            //DownloadStream.getInstance().download(this.store, buffer->consumer.accept(meta, buffer));
         }
 
         @Override

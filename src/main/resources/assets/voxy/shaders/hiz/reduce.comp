@@ -1,0 +1,18 @@
+#version 460 core
+layout(local_size_x=8, local_size_y=8) in;
+#import <voxy:util/depthutils.glsl>
+layout(binding=0) uniform sampler2D sourceDepth;
+layout(binding=1, r32f) writeonly uniform image2D outputDepth;
+layout(binding=2, std140) uniform ReductionParameters { ivec2 outputSize; };
+
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    if (any(greaterThanEqual(pixel, outputSize))) return;
+    vec2 uv=(vec2(pixel)+0.5)/vec2(outputSize);
+    vec4 depths=textureGather(sourceDepth, uv, 0);
+    // Match 26.3 blit.fsh's conservative reduction, including clear-depth holes.
+    bvec4 clear=equal(vec4(FAR), depths);
+    if (any(clear)) depths=mix(vec4(NEAR), depths, clear);
+    float depth=REDUCTION(REDUCTION(depths.x, depths.y), REDUCTION(depths.z, depths.w));
+    imageStore(outputDepth, pixel, vec4(depth));
+}

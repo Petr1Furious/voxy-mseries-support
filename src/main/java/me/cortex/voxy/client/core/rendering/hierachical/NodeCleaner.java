@@ -2,190 +2,141 @@ package me.cortex.voxy.client.core.rendering.hierachical;
 
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import me.cortex.voxy.client.core.gl.GlBuffer;
-import me.cortex.voxy.client.core.gl.shader.AutoBindingShader;
-import me.cortex.voxy.client.core.gl.shader.Shader;
-import me.cortex.voxy.client.core.gl.shader.ShaderType;
+import me.cortex.voxy.client.core.gl.GlTransferBackend;
+import me.cortex.voxy.client.core.gpu.*;
 import me.cortex.voxy.client.core.rendering.util.DownloadStream;
-import me.cortex.voxy.client.core.rendering.util.PrintfDebugUtil;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
-import org.lwjgl.opengl.ARBDirectStateAccess;
+import me.cortex.voxy.common.util.MemoryBuffer;
 import org.lwjgl.system.MemoryUtil;
 
-import static org.lwjgl.opengl.GL30C.glBindBufferRange;
-import static org.lwjgl.opengl.GL42C.glMemoryBarrier;
-import static org.lwjgl.opengl.GL43C.*;
+import java.util.Objects;
+import java.util.function.Consumer;
 
-//Uses compute shaders to compute the last 256 rendered section (64x64 workgroup size maybe)
-// done via warp level sort, then workgroup sort (shared memory), (/w sorting network)
-// then use bubble sort (/w fast path going to middle or 2 subdivisions deep) the bubble it up
-// can do incremental sorting pass aswell, so only scan and sort a rolling sector of sections
-// (over a few frames to not cause lag, maybe)
-
-
-//TODO : USE THIS IN HierarchicalOcclusionTraverser instead of other shit
+/** Selects old, removable geometry using the current visibility sorter and readback pipeline. */
 public class NodeCleaner {
-    //TODO: use batch_visibility_set to clear visibility data when nodes are removed!! (TODO: nodeManager will need to forward info to this)
-
-
-    private static final int SORTING_WORKER_SIZE = 64;
-    private static final int WORK_PER_THREAD = 8;
     static final int OUTPUT_COUNT = 256;
-
-
-    private final AutoBindingShader sorter = Shader.makeAuto(PrintfDebugUtil.PRINTF_processor)
-            .define("WORK_SIZE", SORTING_WORKER_SIZE)
-            .define("ELEMS_PER_THREAD", WORK_PER_THREAD)
-            .define("OUTPUT_SIZE", OUTPUT_COUNT)
-            .define("VISIBILITY_BUFFER_BINDING", 1)
-            .define("OUTPUT_BUFFER_BINDING", 2)
-            .define("NODE_DATA_BINDING", 3)
-            .add(ShaderType.COMPUTE, "voxy:lod/hierarchical/cleaner/sort_visibility.comp")
-            .compile();
-
-    private final AutoBindingShader resultTransformer = Shader.makeAuto()
-            .define("OUTPUT_SIZE", OUTPUT_COUNT)
-            .define("MIN_ID_BUFFER_BINDING", 0)
-            .define("NODE_BUFFER_BINDING", 1)
-            .define("OUTPUT_BUFFER_BINDING", 2)
-            .define("VISIBILITY_BUFFER_BINDING", 3)
-            .add(ShaderType.COMPUTE, "voxy:lod/hierarchical/cleaner/result_transformer.comp")
-            .compile();
-
-    private final AutoBindingShader batchClear = Shader.makeAuto()
-            .define("VISIBILITY_BUFFER_BINDING", 0)
-            .define("LIST_BUFFER_BINDING", 1)
-            .add(ShaderType.COMPUTE, "voxy:lod/hierarchical/cleaner/batch_visibility_set.comp")
-            .compile();
-
-
-    final GlBuffer visibilityBuffer;
-    private final GlBuffer outputBuffer = new GlBuffer(OUTPUT_COUNT*4+OUTPUT_COUNT*8);//Scratch + output
-
+    private final NodeCleanerGpuPasses passes;
+    final IGpuBuffer visibilityBuffer;
+    private final IGpuBuffer outputBuffer;
     private final AsyncNodeManager nodeManager;
-    int visibilityId = 0;
-
+    private final int maxNodeCount;
+    private final UploadStream uploads;
+    private final DownloadStream downloads;
+    private final Consumer<MemoryBuffer> removalConsumer;
+    private final GpuTransferBackend transfers;
+    private final boolean explicitGpu;
+    int visibilityId;
+    private long cleanupPasses;
 
     public NodeCleaner(AsyncNodeManager nodeManager) {
-        this.nodeManager = nodeManager;
-        this.visibilityBuffer = new GlBuffer(nodeManager.maxNodeCount*4L).zero();
-        this.visibilityBuffer.fill(-1);
-
-        this.batchClear
-                .ssbo("VISIBILITY_BUFFER_BINDING", this.visibilityBuffer);
-
-        this.sorter
-                .ssbo("VISIBILITY_BUFFER_BINDING", this.visibilityBuffer)
-                .ssbo("OUTPUT_BUFFER_BINDING", this.outputBuffer);
-
-        /*
-        this.nodeManager.setClear(new NodeManager.ICleaner() {
-            @Override
-            public void alloc(int id) {
-                NodeCleaner.this.allocIds.add(id);
-                NodeCleaner.this.freeIds.remove(id);
-            }
-
-            @Override
-            public void move(int from, int to) {
-                NodeCleaner.this.allocIds.remove(to);
-                glCopyNamedBufferSubData(NodeCleaner.this.visibilityBuffer.id, NodeCleaner.this.visibilityBuffer.id, 4L*from, 4L*to, 4);
-            }
-
-            @Override
-            public void free(int id) {
-                NodeCleaner.this.freeIds.add(id);
-                NodeCleaner.this.allocIds.remove(id);
-            }
-        });
-         */
+        this(nodeManager, null, nodeManager.maxNodeCount, UploadStream.getInstance(), DownloadStream.getInstance(),
+                nodeManager::submitRemoveBatch);
     }
 
+    public NodeCleaner(AsyncNodeManager nodeManager, RenderBackend backend, UploadStream uploads, DownloadStream downloads) {
+        this(nodeManager, backend, nodeManager.maxNodeCount, uploads, downloads, nodeManager::submitRemoveBatch);
+    }
 
-    public void tick(GlBuffer nodeDataBuffer) {
-        this.visibilityId++;
-        if (this.shouldCleanGeometry()) {
-            this.outputBuffer.fill(this.nodeManager.maxNodeCount - 2);//TODO: maybe dont set to zero??
+    /** Standalone cleaner with the same shaders and data layout; consumer owns each returned CPU buffer. */
+    public NodeCleaner(RenderBackend backend, int maxNodeCount, UploadStream uploads, DownloadStream downloads,
+                       Consumer<MemoryBuffer> removalConsumer) {
+        this(null, Objects.requireNonNull(backend), maxNodeCount, uploads, downloads, removalConsumer);
+    }
 
-            this.sorter.bind();
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, nodeDataBuffer.id);
-
-            //TODO: choose whether this is in nodeSpace or section/geometryId space
-            //
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-            //This should (IN THEORY naturally align its self to the pow2 max boarder, if not... well undefined behavior is ok right?)
-            glDispatchCompute((this.nodeManager.getCurrentMaxNodeId() + (SORTING_WORKER_SIZE*WORK_PER_THREAD) - 1) / (SORTING_WORKER_SIZE*WORK_PER_THREAD), 1, 1);
-
-            this.resultTransformer.bind();
-            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 0, this.outputBuffer.id, 0, 4 * OUTPUT_COUNT);
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, nodeDataBuffer.id);
-            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 2, this.outputBuffer.id, 4 * OUTPUT_COUNT, 8 * OUTPUT_COUNT);
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, this.visibilityBuffer.id);
-            glUniform1ui(0, this.visibilityId);
-
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-            glDispatchCompute(1, 1, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-            DownloadStream.INSTANCE.download(this.outputBuffer, 4 * OUTPUT_COUNT, 8 * OUTPUT_COUNT,
-                    buffer -> this.nodeManager.submitRemoveBatch(buffer.copy())//Copy into buffer and emit to node manager
-            );
+    private NodeCleaner(AsyncNodeManager nodeManager, RenderBackend backend, int maxNodeCount,
+                        UploadStream uploads, DownloadStream downloads, Consumer<MemoryBuffer> removalConsumer) {
+        if (maxNodeCount < 512 || maxNodeCount % 512 != 0) {
+            throw new IllegalArgumentException("Cleaner node capacity must be a positive multiple of 512");
         }
+        this.nodeManager = nodeManager;
+        this.maxNodeCount = maxNodeCount;
+        this.uploads = Objects.requireNonNull(uploads);
+        this.downloads = Objects.requireNonNull(downloads);
+        this.removalConsumer = Objects.requireNonNull(removalConsumer);
+        this.transfers = backend == null ? GlTransferBackend.INSTANCE : backend;
+        this.explicitGpu = backend != null;
+        this.visibilityBuffer = backend == null ? new GlBuffer(maxNodeCount * 4L) : backend.createBuffer(maxNodeCount * 4L);
+        IGpuBuffer output = null;
+        try {
+            this.visibilityBuffer.fill(-1);
+            output = backend == null ? new GlBuffer(OUTPUT_COUNT * 12) : backend.createBuffer(OUTPUT_COUNT * 12);
+            this.passes = new NodeCleanerGpuPasses(backend, maxNodeCount);
+        } catch (RuntimeException | Error failure) {
+            if (output != null) output.free();
+            this.visibilityBuffer.free();
+            throw failure;
+        }
+        this.outputBuffer = output;
+    }
+
+    public void tick(IGpuBuffer nodeDataBuffer) {
+        this.visibilityId++;
+        if (this.nodeManager != null && this.shouldCleanGeometry()) {
+            this.clean(nodeDataBuffer, this.nodeManager.getCurrentMaxNodeId());
+        }
+    }
+
+    public void clean(IGpuBuffer nodeDataBuffer, int currentMaxNodeId) {
+        nodeDataBuffer.assertNotFreed();
+        if (currentMaxNodeId < 0 || currentMaxNodeId > this.maxNodeCount || nodeDataBuffer.size() < this.maxNodeCount * 16L) {
+            throw new IllegalArgumentException("Cleaner node range exceeds buffer capacity");
+        }
+        if (currentMaxNodeId == 0) return;
+        cleanupPasses++;
+        if (!this.explicitGpu) this.outputBuffer.fill(this.maxNodeCount - 2);
+        this.passes.clean(nodeDataBuffer, this.visibilityBuffer, this.outputBuffer,
+                (currentMaxNodeId + 511) / 512, this.visibilityId);
+        this.downloads.download(this.outputBuffer, 4L * OUTPUT_COUNT, 8L * OUTPUT_COUNT, buffer -> {
+            MemoryBuffer owned = buffer.copy();
+            try {
+                this.removalConsumer.accept(owned);
+            } catch (RuntimeException | Error failure) {
+                if (!owned.isFreed()) owned.free();
+                throw failure;
+            }
+        });
     }
 
     private boolean shouldCleanGeometry() {
-        if (false) {
-            //If used more than 75% of geometry buffer
-            long used = this.nodeManager.getUsedGeometryCapacity();
-            return 3 < ((double) used) / ((double) (this.nodeManager.getGeometryCapacity() - used));
-        } else {
-            long remaining = this.nodeManager.getGeometryCapacity() - this.nodeManager.getUsedGeometryCapacity();
-            return remaining < 256_000_000;//If less than 256 mb free memory
-        }
+        return shouldCleanGeometry(this.nodeManager.getGeometryCapacity(), this.nodeManager.getUsedGeometryCapacity());
+    }
+
+    public static boolean shouldCleanGeometry(long capacity, long used) {
+        if (capacity <= 0 || used < 0 || used > capacity) throw new IllegalArgumentException("Invalid geometry usage");
+        // The original 256 MB reserve assumes a multi-GB heap. On a 256 MiB
+        // Metal heap it evicts after only 12 MiB, repeatedly collapsing visible
+        // children back to their parents. Keep headroom without discarding most
+        // of a small heap; retain the existing reserve for large heaps.
+        return capacity - used < Math.min(256_000_000L, capacity / 4);
     }
 
     public void updateIds(IntOpenHashSet collection) {
-        if (!collection.isEmpty()) {
-            int count = collection.size();
-            long addr = UploadStream.INSTANCE.rawUploadAddress(count*4);//Internally does upsizing alignement
-
-            long ptr = UploadStream.INSTANCE.getBaseAddress() + addr;
-            var iter = collection.iterator();
-            while (iter.hasNext()) {
-                MemoryUtil.memPutInt(ptr, iter.nextInt()); ptr+=4;
-            }
-            UploadStream.INSTANCE.commit();
-
-            this.batchClear.bind();
-            glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 1, UploadStream.INSTANCE.getRawBufferId(), addr, UploadStream.alignUpAlloc(count*4));
-            glUniform1ui(0, count);
-            glUniform1ui(1, this.visibilityId);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-            glDispatchCompute((count+127)/128, 1, 1);
-            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+        if (collection.isEmpty()) return;
+        // Validate before publishing staging allocations or allowing GPU indexed writes.
+        for (int encoded : collection) {
+            if ((encoded & 0x7fffffff) >= this.maxNodeCount) throw new IllegalArgumentException("Visibility ID exceeds node capacity");
         }
+        int count = collection.size();
+        long offset = this.uploads.rawUploadAddress(Math.multiplyExact(count, 4));
+        long ptr = this.uploads.getBaseAddress() + offset;
+        for (int encoded : collection) {
+            MemoryUtil.memPutInt(ptr, encoded);
+            ptr += 4;
+        }
+        this.uploads.commit();
+        this.passes.update(this.uploads, offset, count, this.visibilityId, this.visibilityBuffer);
     }
 
-    private void dumpDebugData() {
-        int[] outData = new int[OUTPUT_COUNT*3];
-        ARBDirectStateAccess.glGetNamedBufferSubData(this.outputBuffer.id, 0, outData);
-        for(int i =0;i < OUTPUT_COUNT; i++) {
-            System.out.println(outData[i]);
-        }
-        /*
-        System.out.println("---------------\n");
-        for(int i =0;i < OUTPUT_COUNT; i++) {
-            System.out.println(data[i*2+OUTPUT_COUNT]+", "+data[i*2+OUTPUT_COUNT+1]);
-        }*/
-        int[] visData = new int[(int) (this.visibilityBuffer.size()/4)];
-        ARBDirectStateAccess.glGetNamedBufferSubData(this.visibilityBuffer.id, 0, visData);
-        int a = 0;
-    }
+    public IGpuBuffer getVisibilityBuffer() { return this.visibilityBuffer; }
+    public int getVisibilityId() { return this.visibilityId; }
+    public long getCleanupPasses() { return cleanupPasses; }
 
     public void free() {
-        this.sorter.free();
+        this.uploads.commit();
+        this.downloads.flushWaitClear();
+        this.transfers.finish();
+        this.passes.close();
         this.visibilityBuffer.free();
         this.outputBuffer.free();
-        this.batchClear.free();
-        this.resultTransformer.free();
     }
 }

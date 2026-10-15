@@ -7,8 +7,17 @@ import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30.GL_DEPTH24_STENCIL8;
 import static org.lwjgl.opengl.GL45C.*;
 
-public class GlTexture extends TrackedObject {
+public class GlTexture extends TrackedObject implements me.cortex.voxy.client.core.gpu.IGpuTexture {
     public final int id;
+    @Override public int id() { return this.id; }
+    @Override public int getType() { return this.type; }
+
+    @Override public void uploadSubImage2D(int level, int x, int y, int w, int h,
+                                         int format, int type, long dataAddr) {
+        this.assertAllocated();
+        this.assertNotFreed();
+        nglTextureSubImage2D(this.id, level, x, y, w, h, format, type, dataAddr);
+    }
     private final int type;
     private int format;
     private int width;

@@ -109,7 +109,7 @@ public class BasicSectionGeometryManager extends AbstractSectionGeometryManager 
         if (!this.invalidatedSectionIds.isEmpty()) {
             this.invalidatedSectionIds.forEach((int id)-> {
                 var meta = this.sectionMetadata.get(id);
-                long ptr = UploadStream.INSTANCE.upload(this.sectionMetadataBuffer, (long) id *SECTION_METADATA_SIZE, SECTION_METADATA_SIZE);
+                long ptr = UploadStream.getInstance().upload(this.sectionMetadataBuffer, (long) id *SECTION_METADATA_SIZE, SECTION_METADATA_SIZE);
                 if (meta == null) {//We need to clear the gpu side buffer
                     MemoryUtil.memSet(ptr, 0, SECTION_METADATA_SIZE);
                 } else {
@@ -117,7 +117,7 @@ public class BasicSectionGeometryManager extends AbstractSectionGeometryManager 
                 }
             });
             this.invalidatedSectionIds.clear();
-            UploadStream.INSTANCE.commit();
+            UploadStream.getInstance().commit();
         }
     }
 

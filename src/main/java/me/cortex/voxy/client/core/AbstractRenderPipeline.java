@@ -208,7 +208,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
             TimingStatistics.D.start();
             //Tick download stream
-            DownloadStream.INSTANCE.tick();
+            DownloadStream.getInstance().tick();
             TimingStatistics.D.stop();
 
             this.nodeManager.tick(this.traversal.getNodeBuffer(), this.nodeCleaner);

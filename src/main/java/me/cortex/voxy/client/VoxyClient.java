@@ -21,13 +21,22 @@ public class VoxyClient implements ClientModInitializer {
     private static final HashSet<String> FREX = new HashSet<>();
     private static FileLock EXCLUSIVE_LOCK;
     public static void initVoxyClient() {
-        Capabilities.init();//Ensure clinit is called
+        boolean metal = me.cortex.voxy.client.core.metal.MetalSupport.selected();
+        boolean systemSupported;
+        if (metal) {
+            // Probe the actual native device before enabling world services.
+            var backend = new me.cortex.voxy.client.core.metal.MetalRenderBackend();
+            backend.shutdown();
+            systemSupported = true;
+        } else {
+            Capabilities.init();//Ensure clinit is called
 
-        if (Capabilities.INSTANCE.hasBrokenDepthSampler) {
-            Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
+            if (Capabilities.INSTANCE.hasBrokenDepthSampler) {
+                Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
+            }
+
+            systemSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
         }
-
-        boolean systemSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
         if (!systemSupported) {
              Logger.error("Voxy is unsupported on your system.");
         }
@@ -51,11 +60,11 @@ public class VoxyClient implements ClientModInitializer {
 
         if (systemSupported) {
 
-            SharedIndexBuffer.INSTANCE.id();
+            if (!metal) SharedIndexBuffer.getInstance().id();
 
             VoxyCommon.setInstanceFactory(VoxyClientInstance::new);
 
-            if (!Capabilities.INSTANCE.subgroup) {
+            if (!metal && !Capabilities.INSTANCE.subgroup) {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
             }
 

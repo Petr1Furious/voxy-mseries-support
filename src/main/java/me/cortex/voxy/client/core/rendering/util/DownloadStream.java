@@ -1,9 +1,8 @@
 package me.cortex.voxy.client.core.rendering.util;
 
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import me.cortex.voxy.client.core.gl.GlBuffer;
-import me.cortex.voxy.client.core.gl.GlFence;
-import me.cortex.voxy.client.core.gl.GlPersistentMappedBuffer;
+import me.cortex.voxy.client.core.gl.GlTransferBackend;
+import me.cortex.voxy.client.core.gpu.*;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.AllocationArena;
 import me.cortex.voxy.common.util.MemoryBuffer;
@@ -14,20 +13,18 @@ import java.util.Deque;
 import java.util.function.Consumer;
 
 import static me.cortex.voxy.common.util.AllocationArena.SIZE_LIMIT;
-import static org.lwjgl.opengl.GL11.glFinish;
 import static org.lwjgl.opengl.GL30C.GL_MAP_READ_BIT;
 import static org.lwjgl.opengl.GL42.GL_BUFFER_UPDATE_BARRIER_BIT;
-import static org.lwjgl.opengl.GL42.glMemoryBarrier;
 import static org.lwjgl.opengl.GL44.GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT;
-import static org.lwjgl.opengl.GL45.glCopyNamedBufferSubData;
 
-public class DownloadStream {
+public class DownloadStream implements AutoCloseable {
+    private final GpuTransferBackend backend;
     public interface DownloadResultConsumer {
         void consume(long ptr, long size);
     }
 
     private final AllocationArena allocationArena = new AllocationArena();
-    private final GlPersistentMappedBuffer downloadBuffer;
+    private final IGpuPersistentBuffer downloadBuffer;
 
     private final Deque<DownloadFrame> frames = new ArrayDeque<>();
     private final LongArrayList thisFrameAllocations = new LongArrayList();
@@ -35,7 +32,12 @@ public class DownloadStream {
     private final ArrayList<DownloadData> thisFrameDownloadList = new ArrayList<>();
 
     public DownloadStream(long size) {
-        this.downloadBuffer = new GlPersistentMappedBuffer(size, GL_MAP_READ_BIT);//|GL_MAP_COHERENT_BIT
+        this(GlTransferBackend.INSTANCE, size);
+    }
+
+    public DownloadStream(GpuTransferBackend backend, long size) {
+        this.backend = backend;
+        this.downloadBuffer = backend.createPersistentBuffer(size, GL_MAP_READ_BIT);//|GL_MAP_COHERENT_BIT
         this.allocationArena.setLimit(size);
     }
 
@@ -43,28 +45,29 @@ public class DownloadStream {
     private long offset = 0;
 
     //Pulls the entire buffer from the gpu
-    public void download(GlBuffer buffer, DownloadResultConsumer resultConsumer) {
+    public void download(IGpuBuffer buffer, DownloadResultConsumer resultConsumer) {
         this.download(buffer, 0, buffer.size(), resultConsumer);
     }
 
-    public void download(GlBuffer buffer, Consumer<MemoryBuffer> resultConsumer) {
+    public void download(IGpuBuffer buffer, Consumer<MemoryBuffer> resultConsumer) {
         this.download(buffer, 0, buffer.size(), resultConsumer);
     }
 
-    public void download(GlBuffer buffer, long downloadOffset, long size, Consumer<MemoryBuffer> consumer) {
+    public void download(IGpuBuffer buffer, long downloadOffset, long size, Consumer<MemoryBuffer> consumer) {
         this.download(buffer, downloadOffset, size, (ptr,size2)-> {
             consumer.accept(MemoryBuffer.createUntrackedUnfreeableRawFrom(ptr, size));
         });
     }
 
-    public void download(GlBuffer buffer, long downloadOffset, long size, DownloadResultConsumer resultConsumer) {
+    public void download(IGpuBuffer buffer, long downloadOffset, long size, DownloadResultConsumer resultConsumer) {
+        buffer.assertNotFreed();
         if (size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException();
         }
         if (size <= 0) {
             throw new IllegalArgumentException();
         }
-        if (downloadOffset+size > buffer.size()) {
+        if (downloadOffset < 0 || downloadOffset > buffer.size() || size > buffer.size() - downloadOffset) {
             throw new IllegalArgumentException();
         }
 
@@ -76,7 +79,7 @@ public class DownloadStream {
                 this.commit();
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
-                    glFinish();
+                    this.backend.finish();
                     this.tick();
                     this.caddr = this.allocationArena.alloc((int) size);
                 }
@@ -107,12 +110,12 @@ public class DownloadStream {
         if (this.downloadList.isEmpty()) {
             return;
         }
-        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+        this.backend.memoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
         //Copies all the data from target buffers into the download stream
         for (var entry : this.downloadList) {
-            glCopyNamedBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
+            this.backend.copyBufferSubData(entry.target, this.downloadBuffer, entry.targetOffset, entry.downloadStreamOffset, entry.size);
         }
-        glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+        this.backend.memoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
         this.thisFrameDownloadList.addAll(this.downloadList);
         this.downloadList.clear();
 
@@ -123,9 +126,10 @@ public class DownloadStream {
     public void tick() {
         this.commit();
         if (!this.thisFrameAllocations.isEmpty()) {
-            this.frames.add(new DownloadFrame(new GlFence(), new LongArrayList(this.thisFrameAllocations), new ArrayList<>(this.thisFrameDownloadList)));
+            this.frames.add(new DownloadFrame(this.backend.createFence(), new LongArrayList(this.thisFrameAllocations), new ArrayList<>(this.thisFrameDownloadList)));
             this.thisFrameAllocations.clear();
             this.thisFrameDownloadList.clear();
+            this.backend.submit();
         }
 
         while (!this.frames.isEmpty()) {
@@ -139,20 +143,29 @@ public class DownloadStream {
             var frame = this.frames.pop();
 
             //Apply all the callbacks
-            for (var data : frame.data) {
-                data.resultConsumer.consume(this.downloadBuffer.addr() + data.downloadStreamOffset, data.size);
+            try {
+                for (var data : frame.data) {
+                    data.resultConsumer.consume(this.downloadBuffer.addr() + data.downloadStreamOffset, data.size);
+                }
+            } finally {
+                frame.allocations.forEach(this.allocationArena::free);
+                frame.fence.free();
             }
-
-            frame.allocations.forEach(this.allocationArena::free);
-            frame.fence.free();
         }
     }
 
     //Synchonize force flushes everything
     public void waitDiscard() {
-        glFinish();
-        var fence = new GlFence();
-        glFinish();
+        this.commit();
+        if (!this.thisFrameAllocations.isEmpty()) {
+            this.frames.add(new DownloadFrame(this.backend.createFence(), new LongArrayList(this.thisFrameAllocations),
+                    new ArrayList<>(this.thisFrameDownloadList)));
+            this.thisFrameAllocations.clear();
+            this.thisFrameDownloadList.clear();
+        }
+        this.backend.finish();
+        var fence = this.backend.createFence();
+        this.backend.finish();
         while (!fence.signaled())
             Thread.onSpinWait();
         fence.free();
@@ -165,12 +178,12 @@ public class DownloadStream {
     }
 
     public void flushWaitClear() {
-        glFinish();
+        this.backend.finish();
         this.tick();
-        var fence = new GlFence();
-        glFinish();
+        var fence = this.backend.createFence();
+        this.backend.finish();
         while (!fence.signaled()) {
-            glFinish();
+            this.backend.finish();
             Thread.onSpinWait();
         }
         fence.free();
@@ -180,10 +193,20 @@ public class DownloadStream {
         }
     }
 
-    private record DownloadFrame(GlFence fence, LongArrayList allocations, ArrayList<DownloadData> data) {}
-    private record DownloadData(GlBuffer target, long downloadStreamOffset, long targetOffset, long size, DownloadResultConsumer resultConsumer) {}
+    private record DownloadFrame(IGpuFence fence, LongArrayList allocations, ArrayList<DownloadData> data) {}
+    private record DownloadData(IGpuBuffer target, long downloadStreamOffset, long targetOffset, long size, DownloadResultConsumer resultConsumer) {}
 
 
     // Global download stream
-    public static final DownloadStream INSTANCE = new DownloadStream(1<<25);//32 mb download buffer
+    private static final class Global {
+        private static final DownloadStream INSTANCE = new DownloadStream(1 << 25);
+    }
+
+    public static DownloadStream getInstance() { return Global.INSTANCE; }
+
+    @Override
+    public void close() {
+        this.flushWaitClear();
+        this.downloadBuffer.free();
+    }
 }

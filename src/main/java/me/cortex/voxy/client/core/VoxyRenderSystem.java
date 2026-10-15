@@ -55,6 +55,7 @@ import static org.lwjgl.opengl.GL43C.GL_SHADER_STORAGE_BUFFER_BINDING;
 
 public class VoxyRenderSystem {
     private final WorldEngine worldIn;
+    private final MetalWorldRenderer metal;
 
     private final ModelBakerySubsystem modelService;
     private final RenderGenerationService renderGen;
@@ -94,6 +95,21 @@ public class VoxyRenderSystem {
             Logger.warn(msg);
             Minecraft.getInstance().gui.chatListener().handleSystemMessage(Component.literal(msg), false);
         }
+
+        if (me.cortex.voxy.client.core.metal.MetalSupport.selected()) {
+            this.worldIn = world;
+            this.properties = RenderProperties.getRenderProperties();
+            try { this.metal = new MetalWorldRenderer(world, sm, this.properties); }
+            catch (RuntimeException | Error failure) { world.releaseRef(); throw failure; }
+            this.visbleSectionStream = metal.visible;
+            this.viewportSelector = metal.viewports;
+            this.renderDistanceTracker = metal.distance;
+            this.modelService = null; this.renderGen = null; this.geometryData = null;
+            this.nodeManager = null; this.nodeCleaner = null; this.traversal = null;
+            this.geoRef = null; this.pipeline = null; this.boundOutlineRenderer = null;
+            return;
+        }
+        this.metal = null;
 
         //Fking HATE EVERYTHING AAAAAAAAAAAAAAAA
         int[] oldBufferBindings = new int[10];
@@ -223,7 +239,7 @@ public class VoxyRenderSystem {
         */
 
         {//Apply render scaling factor
-            var factor = this.pipeline.getRenderScalingFactor();
+            var factor = this.pipeline == null ? null : this.pipeline.getRenderScalingFactor();
             if (factor != null) {
                 width = (int) (width*factor[0]);
                 height = (int) (height*factor[1]);
@@ -264,6 +280,8 @@ public class VoxyRenderSystem {
         if (sourceDepthTexture == 0) {
             throw new IllegalStateException("Source depth texture cannot be 0");
         }
+
+        if (this.metal != null) { this.metal.render(viewport, sourceDepthTexture, sourceColourTexture); return; }
 
         TimingStatistics.resetSamplers();
 
@@ -330,7 +348,7 @@ public class VoxyRenderSystem {
         //As much dynamic runtime stuff here
         {
             //Tick upload stream (this is ok to do here as upload ticking is just memory management)
-            UploadStream.INSTANCE.tick();
+            UploadStream.getInstance().tick();
 
             while (this.renderDistanceTracker.setCenterAndProcess(viewport.cameraX, viewport.cameraZ) && VoxyClient.isFrexActive());//While FF is active, run until everything is processed
             TimingStatistics.H.start();
@@ -511,7 +529,7 @@ public class VoxyRenderSystem {
             return false;
         }
         //If frex is running we must tick everything to ensure correctness
-        UploadStream.INSTANCE.tick();
+        UploadStream.getInstance().tick();
         //Done here as is allows less gl state resetup
         this.modelService.tick(100_000_000);
         GL11.glFinish();
@@ -530,6 +548,7 @@ public class VoxyRenderSystem {
     }
 
     public void addDebugInfo(List<String> debug) {
+        if (this.metal != null) { this.metal.debug(debug); return; }
         debug.add("Buf/Tex [#/Mb]: [" + GlBuffer.getCount() + "/" + (GlBuffer.getTotalSize()/1_000_000) + "],[" + GlTexture.getCount() + "/" + (GlTexture.getEstimatedTotalSize()/1_000_000)+"]");
         {
             this.modelService.addDebugData(debug);
@@ -548,8 +567,12 @@ public class VoxyRenderSystem {
     }
 
     public void shutdown() {
+        if (this.metal != null) {
+            try { this.metal.close(); } finally { this.worldIn.releaseRef(); }
+            return;
+        }
         Logger.info("Flushing download stream");
-        DownloadStream.INSTANCE.flushWaitClear();
+        DownloadStream.getInstance().flushWaitClear();
         Logger.info("Shutting down rendering");
         try {
             //Cleanup callbacks
@@ -585,7 +608,7 @@ public class VoxyRenderSystem {
 
 
         Logger.info("Flushing download stream");
-        DownloadStream.INSTANCE.flushWaitClear();
+        DownloadStream.getInstance().flushWaitClear();
 
         //Release hold on the world
         this.worldIn.releaseRef();

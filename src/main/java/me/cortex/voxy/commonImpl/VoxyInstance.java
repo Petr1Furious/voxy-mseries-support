@@ -280,6 +280,9 @@ public abstract class VoxyInstance {
         this.activeWorldLock.unlockWrite(stamp);
     }
 
+    public int getPendingSaveCount() { return this.savingService.getPendingSaveCount(); }
+    public long getFailedSaveCount() { return this.savingService.getFailedSaveCount(); }
+
     public boolean isIngestEnabled(WorldIdentifier worldId) {
         return true;
     }

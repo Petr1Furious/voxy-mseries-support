@@ -82,12 +82,15 @@ uint atomicDerefMaxExchangeLocal(uint atId, uint id) {
 void bubbleSortInital(uint vis, uint id) {
     uint start = 0;
     //Fast path cut out half the ops
-    if (visibility[initalSort[(OUTPUT_SIZE-1)>>1]] <= vis) {//Check if we are more than half way
+    if (visibility[initalSort[(OUTPUT_SIZE-1)>>1]&((1u<<31)-1)] <= vis) {//Check if we are more than half way
         start = (OUTPUT_SIZE-1)>>1;
     }
 
     for (uint i = start; i < OUTPUT_SIZE; i++) {
         id = atomicDerefMaxExchangeLocal(i, id);
+        if (id == uint(-1)) {
+            break;
+        }
     }
 }
 

@@ -5,3 +5,21 @@
 /run/
 /out/
 /logs/
+/src/main/resources/natives/macos-arm64/*.dylib
+
+# Isolated Metal development client
+/run-metal-263/
+
+# Local tooling, credentials, native outputs and development evidence
+/.gradle-local/
+/.codex/
+/.agents/
+/.aws/
+.env
+.env.*
+*.dylib
+*.class
+*.log
+*.jfr
+*.hprof
+.DS_Store

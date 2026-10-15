@@ -52,8 +52,16 @@ void main() {
 
     //Me when data race condition between visibilityData in the vert shader and frag shader
     uint previous = visibilityData[sid]&0x7fffffffu;
-    bool wasVisibleLastFrame = previous==(frameId-1);
+    // Zero is the cleared/unseen value, including at the first frame.
+    bool wasVisibleLastFrame = previous != 0u && previous==(frameId-1);
     value = (frameId&0x7fffffffu)|(uint(wasVisibleLastFrame)<<31);//Encode if it was visible last frame
+    #ifdef VOXY_METAL
+    // Keep raw texture rows aligned with GL/IOSurface and convert GL clip depth.
+    gl_Position.y = -gl_Position.y;
+    #ifndef USE_ZERO_ONE_DEPTH
+    gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
+    #endif
+    #endif
 }
 
 

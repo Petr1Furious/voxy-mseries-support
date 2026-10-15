@@ -93,8 +93,11 @@ public class RenderResourceReuse {
         return buffer;
     }
 
-    public static void giveBackGeometryBuffer(GlBuffer geometryBuffer) {
-        GEOMETRY_BUFFER_CACHE.add(geometryBuffer);
+    public static void giveBackGeometryBuffer(me.cortex.voxy.client.core.gpu.IGpuBuffer geometryBuffer) {
+        if (!(geometryBuffer instanceof GlBuffer glBuffer)) {
+            throw new IllegalArgumentException("GL resource cache cannot own a Metal buffer");
+        }
+        GEOMETRY_BUFFER_CACHE.add(glBuffer);
     }
 
     private static long getGeometryBufferSize() {

@@ -18,7 +18,12 @@ void main() {
 
     cullDrawIndirectCommand.count = 6*2*3;
     cullDrawIndirectCommand.instanceCount = sectionCount;
+    #ifdef VOXY_METAL
+    // Metal binds the UInt16 cube range at its own byte offset.
+    cullDrawIndirectCommand.firstIndex = 0;
+    #else
     cullDrawIndirectCommand.firstIndex = (1<<16)*6*2;
+    #endif
     cullDrawIndirectCommand.baseVertex = 0;
     cullDrawIndirectCommand.baseInstance = 0;
 }

@@ -11,6 +11,9 @@
 
 layout(binding = 0) uniform sampler2D blockModelAtlas;
 layout(binding = 2) uniform sampler2D depthTex;
+#ifdef VOXY_VANILLA_MASK
+layout(binding = 7) uniform sampler2D vanillaDepthTex;
+#endif
 
 //#define DEBUG_RENDER
 
@@ -157,6 +160,10 @@ void main() {
     }
 
     //Check the minimum bounding texture and ensure we are greater than it
+    #ifdef VOXY_VANILLA_MASK
+    // Preserve the GL pipeline's stencil exclusion, including equal near-plane depth.
+    if (texelFetch(vanillaDepthTex, ivec2(gl_FragCoord.xy), 0).r != FAR) discard;
+    #endif
     if (DEPTH_SCALAR_COMPARE(gl_FragCoord.z, texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).r)) {
         discard;
         return;

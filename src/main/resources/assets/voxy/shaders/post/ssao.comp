@@ -9,6 +9,22 @@ layout(binding = 2) uniform sampler2D depthTex;
 
 #ifdef BETTER_SSAO
 layout(binding = 3) uniform sampler2D sourceDepthTex;
+#endif
+
+#ifdef VOXY_VULKAN
+layout(binding = 4, std140) uniform SsaoParameters {
+#ifdef BETTER_SSAO
+    mat4 Proj;
+    mat4 invProj;
+    mat4 MV;
+    mat4 sourceInvProj;
+#else
+    mat4 MVP;
+    mat4 invMVP;
+#endif
+};
+#else
+#ifdef BETTER_SSAO
 layout(location = 4) uniform mat4 Proj;
 layout(location = 5) uniform mat4 invProj;
 layout(location = 6) uniform mat4 MV;
@@ -16,6 +32,7 @@ layout(location = 7) uniform mat4 sourceInvProj;
 #else
 layout(location = 3) uniform mat4 MVP;
 layout(location = 4) uniform mat4 invMVP;
+#endif
 #endif
 
 vec3 rev3d(mat4 matrix, vec3 clip) {
@@ -129,7 +146,7 @@ vec2 r2(int n, vec2 seed) {
 vec2 r2(int n) { return r2(n, vec2(0.5)); }
 
 mat3 get_tbn_matrix(vec3 normal) {
-    vec3 tangent = normal.y == 1.0
+    vec3 tangent = abs(normal.y) == 1.0
     ? vec3(1.0, 0.0, 0.0)
     : normalize(cross(vec3(0.0, 1.0, 0.0), normal));
     vec3 bitangent = normalize(cross(tangent, normal));
@@ -137,7 +154,8 @@ mat3 get_tbn_matrix(vec3 normal) {
 }
 
 vec2 clamp_length(vec2 a, float min, float max) {
-    return normalize(a)*clamp(length(a), min, max);
+    float len = length(a);
+    return len == 0.0 ? vec2(0.0) : a * (clamp(len, min, max) / len);
 }
 vec3 projProj(vec3 point) {
     vec4 aa = Proj*vec4(point,1);

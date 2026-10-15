@@ -61,17 +61,18 @@ void addRequest(inout UnpackedNode node) {
     }
 }
 
-void enqueueChildren(in UnpackedNode node) {
-    if (childListIsEmpty(node)) {//Occures in a very rare case/instance so just handle it gracefully
-        return;
+bool enqueueChildren(in UnpackedNode node) {
+    if (!hasChildren(node) || childListIsEmpty(node)) {
+        return false;
     }
 
     uint children = getChildCount(node);
-    pushNodesInit(children);
+    if (!pushNodesInit(children)) return false;
     uint ptr = getChildPtr(node);
     for (int i = 0; i < children; i++) {
         pushNode(ptr+i);
     }
+    return true;
 }
 
 void enqueueSelfForRender(in UnpackedNode node) {
@@ -134,7 +135,11 @@ void traverse(in UnpackedNode node) {
         if (node.lodLevel!=0 && shouldDecend()) {
             if (hasChildren(node)) {
                 //printf("A");
-                enqueueChildren(node);
+                // Keep a coarser mesh visible if the bounded child queue is full.
+                if (!enqueueChildren(node)) {
+                    if (hasMesh(node)) enqueueSelfForRender(node);
+                    else addRequest(node);
+                }
             } else {
                 //printf("B");
                 addRequest(node);

@@ -22,9 +22,9 @@ public class ExactBoundStore implements IBoundStore {
     public void preRender(Viewport<?> viewport) {
         final float renderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance()*16;//In blocks
         {
-            long addr = UploadStream.INSTANCE.uploadTo(this.chunkPosBuffer);
+            long addr = UploadStream.getInstance().uploadTo(this.chunkPosBuffer);
             this.count = findEmitBoundingChunks(viewport, renderDistance, (int) (this.chunkPosBuffer.size() / 8), addr);
-            UploadStream.INSTANCE.commit();
+            UploadStream.getInstance().commit();
         }
         if (this.count<0) {
             this.chunkPosBuffer.free();//Destroy old

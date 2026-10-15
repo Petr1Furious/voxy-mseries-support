@@ -110,9 +110,9 @@ public class IrisVoxyRenderPipeline extends AbstractRenderPipeline {
         super.preSetup(viewport);
         if (this.shaderUniforms != null) {
             //Update the uniforms
-            long ptr = UploadStream.INSTANCE.uploadTo(this.shaderUniforms);
+            long ptr = UploadStream.getInstance().uploadTo(this.shaderUniforms);
             this.data.getUniforms().updater().accept(ptr);
-            UploadStream.INSTANCE.commit();
+            UploadStream.getInstance().commit();
         }
     }
 

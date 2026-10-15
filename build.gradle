@@ -177,6 +177,29 @@ jar {
 
 loom {
     accessWidenerPath = file("src/main/resources/voxy.accesswidener")
+    runs {
+        metalClient {
+            client()
+            runDir 'run-metal-263'
+            vmArg '-Dvoxy.backend=metal'
+            if (project.hasProperty('metalDevWorld') || project.hasProperty('metalDevPreparation')) vmArg '-Dvoxy.dev.world=true'
+            if (project.hasProperty('metalDevExistingWorld')) {
+                vmArg '-Dvoxy.dev.world=true'
+                vmArg "-Dvoxy.dev.existingWorld=${project.property('metalDevExistingWorld')}"
+                if (project.hasProperty('metalDevCameraSweep')) vmArg '-Dvoxy.dev.cameraSweep=true'
+                if (project.hasProperty('metalDevLodBenchmark')) vmArg '-Dvoxy.dev.lodBenchmark=true'
+                if (project.hasProperty('metalDevBenchmarkProfile')) vmArg "-Dvoxy.dev.benchmarkProfile=${project.property('metalDevBenchmarkProfile')}"
+                if (project.hasProperty('metalDevLodChunks')) vmArg "-Dvoxy.dev.lodChunks=${project.property('metalDevLodChunks')}"
+            }
+            if (project.hasProperty('metalDevPreparation')) {
+                vmArg '-Dvoxy.dev.preparation=true'
+                vmArg '-Dchunky.maxWorkingCount=8'
+            }
+            vmArg '--enable-native-access=ALL-UNNAMED'
+            vmArg '-Xmx1536m'
+            vmArg "-Dvoxy.shaderCacheDir=${file('build/metal-shader-cache').absolutePath}"
+        }
+    }
 }
 
 def runtimeOnlyMsk = {arg->}
@@ -262,7 +285,7 @@ dependencies {
     smartDependency("modmenu_version", true)
     smartDependency("lithium_version", true)
     smartDependency("iris_version")
-    smartDependency("chunky_version")
+    smartDependency("chunky_version", project.hasProperty("metalDevPreparation"))
     smartDependency("vivecraft_version")
     smartDependency("flashback_version")
     smartDependency("nvidium_version")
@@ -309,7 +332,7 @@ java {
 }
 
 jar {
-    from("LICENSE") {
+    from("LICENSE.md") {
         rename { "${it}_${project.archives_base_name}"}
     }
 }
@@ -317,6 +340,7 @@ jar {
 
 
 tasks.register('makeExcludedRocksDB', Zip) {
+    inputs.property('keepMacosArm64Jni', true)
     archiveExtension.set("jar")
     entryCompression = ZipEntryCompression.STORED
     destinationDirectory.set temporaryDir
@@ -333,7 +357,7 @@ tasks.register('makeExcludedRocksDB', Zip) {
     exclude {
         def file = it.name
         if (file.endsWith(".jnilib")) {
-            return true
+            return file != 'librocksdbjni-osx-arm64.jnilib'
         }
         if (!file.endsWith(".so")) {
             return false
@@ -355,10 +379,6 @@ processIncludeJars {
 }
 
 jar {
-    doFirst {
-        delete fileTree(getDestinationDirectory().get())
-    }
-
     if (!isInGHA) {
         def hash = gitCommitHash();
         if (!hash.equals("<UnknownCommit>")) {
@@ -367,16 +387,46 @@ jar {
     }
 }
 
-project.ext.lwjglVersion = "3.4.1"
+// Match Minecraft 26.3's resolved LWJGL runtime; JNI modules must use the same version.
+project.ext.lwjglVersion = "3.4.3"
 project.ext.lwjglNatives = "natives-windows"
 
 repositories {
     mavenCentral()
 }
 
+tasks.register('buildMetalNative', Exec) {
+    group = 'build'
+    description = 'Build the Apple Silicon Metal JNI library using the current JDK.'
+    onlyIf { System.getProperty('os.name').toLowerCase().contains('mac') }
+    inputs.files(fileTree('native/metal/src'), file('native/metal/CMakeLists.txt'), file('native/metal/build.sh'))
+    outputs.file('src/main/resources/natives/macos-arm64/libvoxy_metal.dylib')
+    environment 'JAVA_HOME', System.getProperty('java.home')
+    commandLine 'bash', 'native/metal/build.sh', 'Release'
+}
+
+processResources.dependsOn tasks.named('buildMetalNative')
+
+['MetalRenderBackend', 'MetalTriangle', 'MetalCompute', 'MetalVertexBuffer', 'MetalIcb', 'IOSurfaceBridge', 'IOSurfaceGl', 'Voxy26Compute', 'MetalStreams', 'MetalGeometry', 'MetalNodeUploads', 'MetalModelTextures', 'MetalNodeCleaner', 'MetalRawReadback', 'MetalHiZ', 'MetalTraversal', 'MetalViewport', 'MetalMDIC', 'MetalTerrain', 'MetalBounds', 'MetalTerrainIOSurface', 'MetalFrameBridge', 'MetalSsao', 'MetalMDICCapacity', 'MetalFrameFlow'].each { testName ->
+    tasks.register("test${testName}", JavaExec) {
+        group = 'verification'
+        dependsOn classes
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = "me.cortex.voxy.tools.${testName}SmokeTest"
+        jvmArgs '--enable-native-access=ALL-UNNAMED', '-Xmx512m'
+        systemProperty 'voxy.shaderCacheDir', file('build/metal-shader-cache').absolutePath
+    }
+}
+
 
 dependencies {
     implementation platform("org.lwjgl:lwjgl-bom:$lwjglVersion")
+    include(implementation "org.lwjgl:lwjgl-shaderc")
+    include(implementation "org.lwjgl:lwjgl-spvc")
+    include(runtimeOnly "org.lwjgl:lwjgl-shaderc:$lwjglVersion:natives-macos-arm64")
+    include(runtimeOnly "org.lwjgl:lwjgl-spvc:$lwjglVersion:natives-macos-arm64")
+    include(runtimeOnly "org.lwjgl:lwjgl-lmdb:$lwjglVersion:natives-macos-arm64")
+    include(runtimeOnly "org.lwjgl:lwjgl-zstd:$lwjglVersion:natives-macos-arm64")
     if (findProject("lwjgl_use_unsafe")?:false) {
         implementation "org.lwjgl:lwjgl:unsafe"
         include(implementation "org.lwjgl:lwjgl-lmdb:unsafe")

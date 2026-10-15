@@ -28,7 +28,12 @@ vec2 getTAA();
 #endif
 
 void main() {
+    #ifdef VOXY_METAL
+    // A UInt16 cube per instance avoids byte indices and baseInstance batching.
+    uint id = gl_InstanceID;
+    #else
     uint id = (gl_InstanceID<<5)+gl_BaseInstance+(gl_VertexID>>3);
+    #endif
 
     ivec3 origin = unpackPos(chunkPos[id])*16;
     origin -= cameraBlockPos.xyz;
@@ -49,6 +54,13 @@ void main() {
 
     #ifdef TAA
     gl_Position.xy += getTAA()*gl_Position.w;//Apply TAA if we have it
+    #endif
+
+    #ifdef VOXY_METAL
+    gl_Position.y = -gl_Position.y;
+    #ifndef USE_ZERO_ONE_DEPTH
+    gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
+    #endif
     #endif
 }
 

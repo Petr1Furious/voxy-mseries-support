@@ -37,7 +37,7 @@ public class DebugRenderer {
     private final GlBuffer drawBuffer = new GlBuffer(1024).zero();
 
     private void uploadUniform(Viewport<?> viewport) {
-        long ptr = UploadStream.INSTANCE.upload(this.uniformBuffer, 0, 1024);
+        long ptr = UploadStream.getInstance().upload(this.uniformBuffer, 0, 1024);
         int sx = Mth.floor(viewport.cameraX)>>5;
         int sy = Mth.floor(viewport.cameraY)>>5;
         int sz = Mth.floor(viewport.cameraZ)>>5;
@@ -57,7 +57,7 @@ public class DebugRenderer {
 
     public void render(Viewport<?> viewport, GlBuffer nodeData, GlBuffer nodeList) {
         this.uploadUniform(viewport);
-        UploadStream.INSTANCE.commit();
+        UploadStream.getInstance().commit();
 
         this.setupShader.bind();
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, this.drawBuffer.id);
@@ -69,7 +69,7 @@ public class DebugRenderer {
         this.debugShader.bind();
         glBindVertexArray(GlVertexArray.STATIC_VAO);
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, this.drawBuffer.id);
-        GL15.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.INSTANCE_BYTE.id());
+        GL15.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.getByteInstance().id());
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, this.uniformBuffer.id);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, nodeData.id);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, nodeList.id);

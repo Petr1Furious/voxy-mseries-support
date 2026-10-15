@@ -15,6 +15,8 @@ public class SectionSavingService {
     private static final int SOFT_MAX_QUEUE_SIZE = 5_000;
 
     private final Service service;
+    private final java.util.concurrent.atomic.AtomicInteger pendingSaves = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicLong failedSaves = new java.util.concurrent.atomic.AtomicLong();
     private record SaveEntry(WorldEngine engine, WorldSection section) {}
     private final ConcurrentLinkedDeque<SaveEntry> saveQueue = new ConcurrentLinkedDeque<>();
 
@@ -35,9 +37,13 @@ public class SectionSavingService {
                 section.setNotDirty();
             }
         } catch (Exception e) {
+            this.failedSaves.incrementAndGet();
             Logger.error("Voxy saver had an exception while executing please check logs and report error", e);
         }
-        section.release();
+        finally {
+            section.release();
+            this.pendingSaves.decrementAndGet();
+        }
     }
 
     /*
@@ -75,6 +81,7 @@ public class SectionSavingService {
                 }
             }
 
+            this.pendingSaves.incrementAndGet();
             this.saveQueue.add(new SaveEntry(in, section));
             this.service.execute();
             return true;
@@ -93,6 +100,9 @@ public class SectionSavingService {
             this.processJob();
         }
     }
+
+    public int getPendingSaveCount() { return this.pendingSaves.get(); }
+    public long getFailedSaveCount() { return this.failedSaves.get(); }
 
     public int getTaskCount() {
         return this.service.numJobs();

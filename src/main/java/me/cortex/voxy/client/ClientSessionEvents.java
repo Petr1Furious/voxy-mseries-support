@@ -24,6 +24,7 @@ public class ClientSessionEvents {
         if (!inSession) throw new IllegalStateException("Cannot end a session while not in a session");
         inSession = false;
 
+        LodPreparation.stop();
         VoxyCommon.shutdownInstance();
     }
 }

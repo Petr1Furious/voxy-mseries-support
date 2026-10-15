@@ -4,6 +4,8 @@ import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
+import me.cortex.voxy.client.core.gpu.IGpuTexture;
+import me.cortex.voxy.client.core.gpu.RenderBackend;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
@@ -22,8 +24,9 @@ import static org.lwjgl.opengl.GL45C.glTextureBarrier;
 
 public class HiZBuffer {
     private final Shader hiz;
-    private final GlFramebuffer fb = new GlFramebuffer().name("HiZ");
-    private final int sampler = glGenSamplers();
+    private final GlFramebuffer fb;
+    private final int sampler;
+    private final GpuHiZBuffer gpu;
     private final int type;
     private GlTexture texture;
     private int levels;
@@ -35,6 +38,9 @@ public class HiZBuffer {
         this(properties, GL_DEPTH24_STENCIL8);
     }
     public HiZBuffer(RenderProperties properties, int type) {
+        this.gpu = null;
+        this.fb = new GlFramebuffer().name("HiZ");
+        this.sampler = glGenSamplers();
         glNamedFramebufferDrawBuffer(this.fb.id, GL_NONE);
         this.type = type;
         this.hiz = Shader.make()
@@ -44,6 +50,23 @@ public class HiZBuffer {
                 .compile()
                 .name("HiZ Builder");
         this.properties = properties;
+    }
+
+    public HiZBuffer(RenderProperties properties, RenderBackend backend) {
+        this.properties = properties;
+        this.type = GL_R32F;
+        this.fb = null;
+        this.hiz = null;
+        this.sampler = 0;
+        this.gpu = new GpuHiZBuffer(backend, properties);
+    }
+
+    public void buildMipChain(IGpuTexture sourceDepth, int width, int height) {
+        if (this.gpu != null) this.gpu.buildMipChain(sourceDepth, width, height);
+        else {
+            if (!(sourceDepth instanceof GlTexture)) throw new IllegalArgumentException("GL HiZ requires a GL source");
+            this.buildMipChain(sourceDepth.id(), width, height);
+        }
     }
 
     private void alloc(int width, int height) {
@@ -73,6 +96,7 @@ public class HiZBuffer {
     }
 
     public void buildMipChain(int srcDepthTex, int width, int height) {
+        if (this.gpu != null) throw new IllegalStateException("GPU HiZ requires a GPU texture source");
         if (this.width != Integer.highestOneBit(width) || this.height != Integer.highestOneBit(height)) {
             if (this.texture != null) {
                 this.texture.free();
@@ -118,6 +142,10 @@ public class HiZBuffer {
     }
 
     public void free() {
+        if (this.gpu != null) {
+            this.gpu.close();
+            return;
+        }
         this.fb.free();
         if (this.texture != null) {
             this.texture.free();
@@ -128,10 +156,14 @@ public class HiZBuffer {
     }
 
     public int getHizTextureId() {
+        if (this.gpu != null) throw new IllegalStateException("GPU HiZ must bind its GPU texture through an encoder");
         return this.texture.id;
     }
 
+    public IGpuTexture getTexture() { return this.gpu != null ? this.gpu.getTexture() : this.texture; }
+
     public int getPackedLevels() {
+        if (this.gpu != null) return this.gpu.getPackedLevels();
         return (this.width<<16)|this.height;//+1
     }
 }

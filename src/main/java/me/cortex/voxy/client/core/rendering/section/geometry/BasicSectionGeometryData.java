@@ -2,6 +2,10 @@ package me.cortex.voxy.client.core.rendering.section.geometry;
 
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.GlTransferBackend;
+import me.cortex.voxy.client.core.gpu.GpuTransferBackend;
+import me.cortex.voxy.client.core.gpu.IGpuBuffer;
+import me.cortex.voxy.client.core.gpu.RenderBackend;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.util.ThreadUtils;
 
@@ -13,14 +17,17 @@ import static org.lwjgl.opengl.GL15C.glBindBuffer;
 
 public class BasicSectionGeometryData implements IGeometryData {
     public static final int SECTION_METADATA_SIZE = 32;
-    private final GlBuffer sectionMetadataBuffer;
-    private final GlBuffer geometryBuffer;
+    private final IGpuBuffer sectionMetadataBuffer;
+    private final IGpuBuffer geometryBuffer;
+    private final GpuTransferBackend backend;
     public final boolean isExternalGeometryBuffer;
 
     private final int maxSectionCount;
     private int currentSectionCount;
 
     public BasicSectionGeometryData(int maxSectionCount, GlBuffer geometryBuffer) {
+        validateCapacity(maxSectionCount, geometryBuffer.size());
+        this.backend = GlTransferBackend.INSTANCE;
         this.maxSectionCount = maxSectionCount;
         this.sectionMetadataBuffer = new GlBuffer((long) maxSectionCount * SECTION_METADATA_SIZE);
         //8 Cause a quad is 8 bytes
@@ -32,6 +39,8 @@ public class BasicSectionGeometryData implements IGeometryData {
     }
 
     public BasicSectionGeometryData(int maxSectionCount, long geometryCapacity) {
+        validateCapacity(maxSectionCount, geometryCapacity);
+        this.backend = GlTransferBackend.INSTANCE;
         this.isExternalGeometryBuffer = false;
         this.maxSectionCount = maxSectionCount;
         this.sectionMetadataBuffer = new GlBuffer((long) maxSectionCount * SECTION_METADATA_SIZE);
@@ -78,13 +87,45 @@ public class BasicSectionGeometryData implements IGeometryData {
         Logger.info("Successfully allocated the geometry buffer in " + delta + "ms");
     }
 
+    /** Allocate geometry using the selected GPU backend, without GL capability queries. */
+    public BasicSectionGeometryData(RenderBackend backend, int maxSectionCount, long geometryCapacity) {
+        validateCapacity(maxSectionCount, geometryCapacity);
+        this.backend = backend;
+        this.maxSectionCount = maxSectionCount;
+        this.isExternalGeometryBuffer = false;
+        this.sectionMetadataBuffer = backend.createBuffer((long) maxSectionCount * SECTION_METADATA_SIZE);
+        try {
+            this.geometryBuffer = backend.createBuffer(geometryCapacity, 0, false);
+        } catch (RuntimeException | Error failure) {
+            this.sectionMetadataBuffer.free();
+            throw failure;
+        }
+    }
+
+    /** Metadata is owned here; the caller retains ownership of the supplied geometry buffer. */
+    public BasicSectionGeometryData(RenderBackend backend, int maxSectionCount, IGpuBuffer geometryBuffer) {
+        geometryBuffer.assertNotFreed();
+        validateCapacity(maxSectionCount, geometryBuffer.size());
+        this.backend = backend;
+        this.maxSectionCount = maxSectionCount;
+        this.isExternalGeometryBuffer = true;
+        this.geometryBuffer = geometryBuffer;
+        this.sectionMetadataBuffer = backend.createBuffer((long) maxSectionCount * SECTION_METADATA_SIZE);
+    }
+
+    private static void validateCapacity(int maxSectionCount, long capacity) {
+        if (maxSectionCount <= 0 || capacity <= 0 || capacity % 8 != 0) {
+            throw new IllegalArgumentException("Geometry requires positive section capacity and an 8-byte-aligned buffer");
+        }
+    }
+
     private long sparseCommitment = 0;//Tracks the current range of the allocated sparse buffer
     public void ensureAccessable(int maxElementAccess) {
         long size = (Integer.toUnsignedLong(maxElementAccess)*8L+65535L)&~65535L;
         //If we are a sparse buffer, ensure the memory upto the requested size is allocated
         if (this.geometryBuffer.isSparse()) {
             if (this.sparseCommitment < size) {//if we try to access memory outside the allocation range, allocate it
-                glBindBuffer(GL_ARRAY_BUFFER, this.geometryBuffer.id);
+                glBindBuffer(GL_ARRAY_BUFFER, this.geometryBuffer.id());
                 size += 65536L*1024;//increase size by 64mb to prevent driver allocation thrashing
                 glBufferPageCommitmentARB(GL_ARRAY_BUFFER, this.sparseCommitment, size-this.sparseCommitment, true);
                 glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -94,11 +135,11 @@ public class BasicSectionGeometryData implements IGeometryData {
         }
     }
 
-    public GlBuffer getGeometryBuffer() {
+    public IGpuBuffer getGeometryBuffer() {
         return this.geometryBuffer;
     }
 
-    public GlBuffer getMetadataBuffer() {
+    public IGpuBuffer getMetadataBuffer() {
         return this.sectionMetadataBuffer;
     }
 
@@ -108,6 +149,7 @@ public class BasicSectionGeometryData implements IGeometryData {
     }
 
     public void setSectionCount(int count) {
+        if (count < 0 || count > this.maxSectionCount) throw new IllegalArgumentException("Section count exceeds capacity");
         this.currentSectionCount = count;
     }
 
@@ -121,6 +163,12 @@ public class BasicSectionGeometryData implements IGeometryData {
 
     @Override
     public void free() {
+        if (this.backend != GlTransferBackend.INSTANCE) {
+            this.backend.finish();
+            this.sectionMetadataBuffer.free();
+            if (!this.isExternalGeometryBuffer) this.geometryBuffer.free();
+            return;
+        }
         this.sectionMetadataBuffer.free();
 
         long gpuMemory = 0;
@@ -129,7 +177,7 @@ public class BasicSectionGeometryData implements IGeometryData {
             gpuMemory = Capabilities.INSTANCE.getFreeDedicatedGpuMemory();
         }
         if (this.geometryBuffer.isSparse()) {
-            glBindBuffer(GL_ARRAY_BUFFER, this.geometryBuffer.id);
+            glBindBuffer(GL_ARRAY_BUFFER, this.geometryBuffer.id());
             glBufferPageCommitmentARB(GL_ARRAY_BUFFER, 0, this.sparseCommitment, false);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
         }

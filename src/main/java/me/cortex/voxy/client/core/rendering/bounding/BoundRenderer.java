@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.rendering.bounding;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gpu.RenderBackend;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
 import me.cortex.voxy.client.core.gl.shader.AutoBindingShader;
 import me.cortex.voxy.client.core.gl.shader.Shader;
@@ -29,12 +30,23 @@ import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
 //This is a render subsystem, its very simple in what it does
 // it renders an AABB around loaded chunks, thats it
 public class BoundRenderer {
-    private final GlBuffer uniformBuffer = new GlBuffer(128);
+    private final GlBuffer uniformBuffer;
+    private final GpuBoundRenderer gpu;
     private final Shader rasterShader;
     private final RenderProperties properties;
 
     private final AbstractRenderPipeline pipeline;
+    public BoundRenderer(RenderProperties properties, RenderBackend backend, UploadStream uploads) {
+        this.properties = properties;
+        this.pipeline = null;
+        this.uniformBuffer = null;
+        this.rasterShader = null;
+        this.gpu = new GpuBoundRenderer(backend, uploads, properties);
+    }
+
     public BoundRenderer(AbstractRenderPipeline pipeline) {
+        this.uniformBuffer = new GlBuffer(128);
+        this.gpu = null;
         this.properties = pipeline.properties;
 
         String vert = ShaderLoader.parse("voxy:chunkoutline/outline.vsh");
@@ -57,6 +69,14 @@ public class BoundRenderer {
 
     //Bind and render, changing as little gl state as possible so that the caller may configure how it wants to render
     public void render(Viewport<?> viewport, IBoundStore store) {
+        this.render(viewport, store, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16);
+    }
+
+    public void render(Viewport<?> viewport, IBoundStore store, float renderDistance) {
+        if (this.gpu != null) {
+            this.gpu.render(viewport, store, renderDistance);
+            return;
+        }
         store.preRender(viewport);
         int count = store.getCount();
         if (count == 0) {
@@ -64,7 +84,6 @@ public class BoundRenderer {
             return;
         }
         ((AutoBindingShader)this.rasterShader).ssbo(1, store.getBuffer());
-        final float renderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance()*16;//In blocks
         this.renderInner(viewport, renderDistance, count);
         store.postRender(viewport);
     }
@@ -75,7 +94,7 @@ public class BoundRenderer {
             return;
         }
 
-        long ptr = UploadStream.INSTANCE.upload(this.uniformBuffer, 0, 128);
+        long ptr = UploadStream.getInstance().upload(this.uniformBuffer, 0, 128);
         long matPtr = ptr; ptr += 4*4*4;
 
         {//This is recomputed to be in chunk section space not worldsection
@@ -96,7 +115,7 @@ public class BoundRenderer {
             viewport.MVP.translate(negInnerBlock.negate(), new Matrix4f()).getToAddress(matPtr);
             MemoryUtil.memPutFloat(ptr, renderDistanceBlocks); ptr += 4;
         }
-        UploadStream.INSTANCE.commit();
+        UploadStream.getInstance().commit();
 
 
         {
@@ -113,7 +132,7 @@ public class BoundRenderer {
         glBindVertexArray(GlVertexArray.STATIC_VAO);
         viewport.depthBoundingBuffer.bind();
         this.rasterShader.bind();
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.INSTANCE_BB_BYTE.id());
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.getByteCubesInstance().id());
         if (this.pipeline != null) this.pipeline.bindUniforms();//shader TAA
 
         //Batch the draws into groups of size 32
@@ -137,6 +156,7 @@ public class BoundRenderer {
     }
 
     public void free() {
+        if (this.gpu != null) { this.gpu.close(); return; }
         this.rasterShader.free();
         this.uniformBuffer.free();
     }

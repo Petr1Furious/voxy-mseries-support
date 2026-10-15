@@ -25,6 +25,12 @@ public class MixinMinecraft {
     }
 
 
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void voxy$metalDevelopmentWorld(CallbackInfo ci) {
+        me.cortex.voxy.tools.MetalDevelopmentWorld.tick((Minecraft)(Object)this);
+        me.cortex.voxy.client.LodPreparation.tick((Minecraft)(Object)this);
+    }
+
     @Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;ZZ)V", at = @At("TAIL"))
     private void voxy$injectWorldClose(CallbackInfo ci) {
         if (ClientSessionEvents.inSession) {

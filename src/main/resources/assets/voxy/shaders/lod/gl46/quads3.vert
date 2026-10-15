@@ -16,6 +16,12 @@
 #define POSITION_SCRATCH_BINDING 5
 #define LIGHTING_SAMPLER_BINDING 1
 
+#ifdef VOXY_METAL_BI_FIX
+layout(binding = 6, std140) uniform VoxyMetalPerDrawUBO {
+    uint voxyMetalBaseInstance;
+};
+#endif
+
 #ifdef USE_SINGLE_TRI
 #define USE_NV_BARRY
 #endif
@@ -51,8 +57,18 @@ void main() {
     taaOffset = taaShift();
 
     QuadData quad;
+    #ifdef VOXY_METAL_BI_FIX
+    uvec2 pos = positionBuffer[voxyMetalBaseInstance];
+    #else
     uvec2 pos = positionBuffer[gl_BaseInstance];
+    #endif
+    #ifdef VOXY_METAL
+    // Metal has no GL_FIRST_VERTEX_CONVENTION state. Every corner must carry
+    // the same flat attributes so either triangle's provoking vertex is valid.
+    setupQuad(quad, quadData[uint(gl_VertexID)>>2], pos, true);
+    #else
     setupQuad(quad, quadData[uint(gl_VertexID)>>2], pos, (gl_VertexID&3) == 1);
+    #endif
 
     uint cornerId = gl_VertexID&3;
 
@@ -63,6 +79,13 @@ void main() {
     #endif
     #endif
     (getQuadCornerPos(quad, cornerId));
+
+    #ifdef VOXY_METAL
+    gl_Position.y = -gl_Position.y;
+    #ifndef USE_ZERO_ONE_DEPTH
+    gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;
+    #endif
+    #endif
 
 
     #ifndef USE_NV_BARRY

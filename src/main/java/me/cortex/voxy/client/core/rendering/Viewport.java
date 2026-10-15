@@ -1,7 +1,8 @@
 package me.cortex.voxy.client.core.rendering;
 
 import me.cortex.voxy.client.core.RenderProperties;
-import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gpu.IGpuBuffer;
+import me.cortex.voxy.client.core.gpu.RenderBackend;
 import me.cortex.voxy.client.core.rendering.util.DepthFramebuffer;
 import me.cortex.voxy.client.core.rendering.util.HiZBuffer;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
@@ -13,7 +14,7 @@ import java.lang.reflect.Field;
 public abstract class Viewport <A extends Viewport<A>> {
     //public final HiZBuffer2 hiZBuffer = new HiZBuffer2();
     public final HiZBuffer hiZBuffer;
-    public final DepthFramebuffer depthBoundingBuffer = new DepthFramebuffer();
+    public final DepthFramebuffer depthBoundingBuffer;
 
     private static final Field planesField;
     static {
@@ -47,6 +48,10 @@ public abstract class Viewport <A extends Viewport<A>> {
     public float farPlane;
 
     protected Viewport(RenderProperties properties) {
+        this(properties, null);
+    }
+
+    protected Viewport(RenderProperties properties, RenderBackend backend) {
         Vector4f[] planes = null;
         try {
              planes = (Vector4f[]) planesField.get(this.frustum);
@@ -56,7 +61,8 @@ public abstract class Viewport <A extends Viewport<A>> {
         this.frustumPlanes = planes;
 
         this.properties = properties;
-        this.hiZBuffer = new HiZBuffer(properties);
+        this.hiZBuffer = backend == null ? new HiZBuffer(properties) : new HiZBuffer(properties, backend);
+        this.depthBoundingBuffer = backend == null ? new DepthFramebuffer() : new DepthFramebuffer(backend);
     }
 
     public final void delete() {
@@ -109,6 +115,19 @@ public abstract class Viewport <A extends Viewport<A>> {
 
         //Update the frustum
         this.frustum.set(this.MVP, false);
+        // The traversal uses the first five planes and intentionally omits the far plane.
+        // JOML's conventional near/far extraction must follow the active clip range and reverse-Z.
+        Vector4f z = new Vector4f(this.MVP.m02(), this.MVP.m12(), this.MVP.m22(), this.MVP.m32());
+        Vector4f w = new Vector4f(this.MVP.m03(), this.MVP.m13(), this.MVP.m23(), this.MVP.m33());
+        if (this.properties.isReverseZ()) {
+            this.frustumPlanes[4].set(w).sub(z);
+            this.frustumPlanes[5].set(z);
+            if (!this.properties.isZero2One()) this.frustumPlanes[5].add(w);
+        } else {
+            this.frustumPlanes[4].set(z);
+            if (!this.properties.isZero2One()) this.frustumPlanes[4].add(w);
+            this.frustumPlanes[5].set(w).sub(z);
+        }
 
         //Translation vectors
         int sx = Mth.floor(this.cameraX)>>5;
@@ -128,5 +147,5 @@ public abstract class Viewport <A extends Viewport<A>> {
         return (A) this;
     }
 
-    public abstract GlBuffer getRenderList();
+    public abstract IGpuBuffer getRenderList();
 }

@@ -1,6 +1,8 @@
 package me.cortex.voxy.client.core.rendering.bounding;
 
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gpu.IGpuBuffer;
+import me.cortex.voxy.client.core.gpu.RenderBackend;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.common.util.MemoryBuffer;
@@ -14,9 +16,20 @@ import org.lwjgl.system.MemoryUtil;
 // it renders an AABB around loaded chunks, thats it
 public class ColumnStreamedBoundStore implements IBoundStore {
     private static final int INIT_MAX_CHUNK_COUNT = 1<<12;
-    private GlBuffer chunkPosBuffer = new GlBuffer(INIT_MAX_CHUNK_COUNT*8);//Stored as ivec2
+    private IGpuBuffer chunkPosBuffer;
+    private final RenderBackend backend;
+    private final UploadStream uploads;//Stored as ivec2
     private int count;
     public ColumnStreamedBoundStore() {
+        this.backend = null;
+        this.uploads = UploadStream.getInstance();
+        this.chunkPosBuffer = new GlBuffer(INIT_MAX_CHUNK_COUNT * 8L);
+    }
+
+    public ColumnStreamedBoundStore(RenderBackend backend, UploadStream uploads) {
+        this.backend = java.util.Objects.requireNonNull(backend);
+        this.uploads = java.util.Objects.requireNonNull(uploads);
+        this.chunkPosBuffer = backend.createBuffer(INIT_MAX_CHUNK_COUNT * 8L);
     }
 
     //Bind and render, changing as little gl state as possible so that the caller may configure how it wants to render
@@ -24,20 +37,29 @@ public class ColumnStreamedBoundStore implements IBoundStore {
     public void preRender(Viewport<?> viewport) {
         final float renderDistance = Minecraft.getInstance().options.getEffectiveRenderDistance()*16;//In blocks
         {
-            long addr = UploadStream.INSTANCE.uploadTo(this.chunkPosBuffer);
+            long addr = this.uploads.uploadTo(this.chunkPosBuffer);
             this.count = findEmitBoundingChunks(viewport, renderDistance, (int) (this.chunkPosBuffer.size() / 8), addr);
-            UploadStream.INSTANCE.commit();
+            this.uploads.commit();
         }
         if (this.count<0) {
-            this.chunkPosBuffer.free();//Destroy old
             var chunkPoss = new MemoryBuffer((-this.count) * 8L);
             this.count = findEmitBoundingChunks(viewport, renderDistance, -this.count, chunkPoss.address);
             if (this.count<0) {
                 chunkPoss.free();
                 throw new IllegalStateException("Not sure how this is possible, should have exact capacity. badness: " + this.count);
             }
-            this.chunkPosBuffer = new GlBuffer(chunkPoss);//Setup new buffer with the new data
-            chunkPoss.free();
+            try {
+                IGpuBuffer replacement = this.backend == null ? new GlBuffer(chunkPoss) : this.backend.createBuffer(chunkPoss.size);
+                if (this.backend != null) {
+                    this.backend.finish();
+                    this.uploads.upload(replacement, 0, chunkPoss);
+                    this.uploads.commit();
+                }
+                this.chunkPosBuffer.free();
+                this.chunkPosBuffer = replacement;
+            } finally {
+                chunkPoss.free();
+            }
         }
     }
 
@@ -48,6 +70,7 @@ public class ColumnStreamedBoundStore implements IBoundStore {
     }
 
     public void free() {
+        if (this.backend != null) this.backend.finish();
         this.chunkPosBuffer.free();
     }
 
@@ -119,7 +142,7 @@ public class ColumnStreamedBoundStore implements IBoundStore {
     }
 
     @Override
-    public GlBuffer getBuffer() {
+    public IGpuBuffer getBuffer() {
         return this.chunkPosBuffer;
     }
 

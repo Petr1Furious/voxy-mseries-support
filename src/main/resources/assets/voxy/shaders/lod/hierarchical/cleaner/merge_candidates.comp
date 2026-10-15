@@ -1,0 +1,35 @@
+#version 460 core
+layout(local_size_x=128) in;
+layout(binding=0, std430) readonly buffer InputCandidates { uvec2 inputKeys[]; };
+layout(binding=2, std430) writeonly buffer OutputCandidates { uvec2 outputKeys[]; };
+layout(binding=4, std140) uniform MergeParameters { uint groupCount; };
+
+bool lessKey(uvec2 a, uvec2 b) { return a.x<b.x || (a.x==b.x && a.y<b.y); }
+
+void main() {
+    uint leftGroup=gl_WorkGroupID.x*2;
+    if (leftGroup+1>=groupCount) {
+        for (uint i=gl_LocalInvocationID.x; i<256; i+=128) {
+            outputKeys[gl_WorkGroupID.x*256+i]=inputKeys[leftGroup*256+i];
+        }
+        return;
+    }
+    // Each candidate computes its stable rank in the other sorted list.
+    // Equal keys from the left list precede equal keys from the right list.
+    for (uint i=gl_LocalInvocationID.x; i<512; i+=128) {
+        bool right=i>=256;
+        uint localIndex=i&255;
+        uint ownBase=(leftGroup+uint(right))*256;
+        uint otherBase=(leftGroup+uint(!right))*256;
+        uvec2 key=inputKeys[ownBase+localIndex];
+        uint lo=0, hi=256;
+        while (lo<hi) {
+            uint mid=(lo+hi)>>1;
+            uvec2 other=inputKeys[otherBase+mid];
+            bool before=right ? !lessKey(key,other) : lessKey(other,key);
+            if (before) lo=mid+1; else hi=mid;
+        }
+        uint rank=localIndex+lo;
+        if (rank<256) outputKeys[gl_WorkGroupID.x*256+rank]=key;
+    }
+}

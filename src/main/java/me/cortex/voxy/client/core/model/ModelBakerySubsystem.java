@@ -21,8 +21,13 @@ public class ModelBakerySubsystem {
     private volatile boolean isRunning = true;
     private volatile Throwable processingThreadException;
     public ModelBakerySubsystem(Mapper mapper) {
+        this(mapper, new ModelStore());
+    }
+
+    /** Owns the supplied GPU store; shutdown releases it after the CPU baking worker stops. */
+    public ModelBakerySubsystem(Mapper mapper, ModelStore storage) {
         this.mapper = mapper;
-        this.storage = new ModelStore();
+        this.storage = storage;
         this.factory = new ModelFactory(mapper, this.storage);
         this.processingThread = new Thread(()->{//TODO replace this with something good/integrate it into the async processor so that we just have less threads overall
             while (this.isRunning) {

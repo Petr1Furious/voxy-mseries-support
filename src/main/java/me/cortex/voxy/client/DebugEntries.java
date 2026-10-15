@@ -53,7 +53,7 @@ public class DebugEntries {
         if ((entry!=DebugScreenEntryStatus.NEVER)!=previousGpuDebugEnabled) {
             previousGpuDebugEnabled ^= true;
 
-            GPUTiming.INSTANCE.setEnabled(previousGpuDebugEnabled);
+            if (!me.cortex.voxy.client.core.metal.MetalSupport.selected()) GPUTiming.INSTANCE.setEnabled(previousGpuDebugEnabled);
             RenderStatistics.enabled = previousGpuDebugEnabled;
             var renderer = Minecraft.getInstance().levelExtractor;
             if (renderer!=null)renderer.allChanged();

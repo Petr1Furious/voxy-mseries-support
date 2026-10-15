@@ -1,0 +1,46 @@
+#version 460 core
+layout(local_size_x=64) in;
+#import <voxy:lod/hierarchical/node.glsl>
+
+layout(binding=1, std430) readonly buffer VisibilityData { uint visibility[]; };
+layout(binding=2, std430) writeonly buffer Candidates { uvec2 candidates[]; };
+layout(binding=4, std140) uniform SelectionParameters { uint nodeCount; uint fallbackId; };
+shared uvec2 entries[512];
+
+bool greaterKey(uvec2 a, uvec2 b) {
+    return a.x > b.x || (a.x == b.x && a.y > b.y);
+}
+
+bool eligible(uint id) {
+    UnpackedNode node;
+    if (all(equal(unpackNode(node, id), uvec4(-1)))) return false;
+    return hasMesh(node) && !isEmptyMesh(node) && node.lodLevel != 4 && !hasRequested(node);
+}
+
+void main() {
+    for (uint i=gl_LocalInvocationID.x; i<512; i+=64) {
+        uint id=gl_WorkGroupID.x*512+i;
+        uvec2 key=uvec2(uint(-1), fallbackId);
+        if (id<nodeCount && visibility[id]!=uint(-1) && eligible(id)) key=uvec2(visibility[id], id);
+        entries[i]=key;
+    }
+    barrier();
+    // All pairs are disjoint within a bitonic stage; one invocation writes both keys.
+    for (uint width=2; width<=512; width<<=1) {
+        for (uint step=width>>1; step>0; step>>=1) {
+            for (uint i=gl_LocalInvocationID.x; i<512; i+=64) {
+                uint other=i^step;
+                if (other>i) {
+                    uvec2 a=entries[i], b=entries[other];
+                    bool ascending=(i&width)==0;
+                    if (ascending ? greaterKey(a,b) : greaterKey(b,a)) {
+                        entries[i]=b;
+                        entries[other]=a;
+                    }
+                }
+            }
+            barrier();
+        }
+    }
+    for (uint i=gl_LocalInvocationID.x; i<256; i+=64) candidates[gl_WorkGroupID.x*256+i]=entries[i];
+}

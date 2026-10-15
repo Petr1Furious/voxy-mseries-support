@@ -9,21 +9,26 @@ import static org.lwjgl.opengl.GL12.GL_TEXTURE_WRAP_R;
 import static org.lwjgl.opengl.GL33.glBindSampler;
 import static org.lwjgl.opengl.GL33.glSamplerParameteri;
 import static org.lwjgl.opengl.GL45.glBindTextureUnit;
-import static org.lwjgl.opengl.GL45.glCreateSamplers;
+import static org.lwjgl.opengl.GL33.glGenSamplers;
 
 public class LightMapHelper {
-    private static final int LM_SAMPLER;
-    static {
-        LM_SAMPLER = glCreateSamplers();
-        glSamplerParameteri(LM_SAMPLER, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glSamplerParameteri(LM_SAMPLER, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glSamplerParameteri(LM_SAMPLER, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glSamplerParameteri(LM_SAMPLER, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glSamplerParameteri(LM_SAMPLER, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    // The Metal path only needs the Minecraft texture ID, without initializing any GL draw resources.
+    private static final class GlSampler {
+        static final int ID = create();
+    }
+
+    private static int create() {
+        int sampler = glGenSamplers();
+        glSamplerParameteri(sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glSamplerParameteri(sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glSamplerParameteri(sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glSamplerParameteri(sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glSamplerParameteri(sampler, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+        return sampler;
     }
 
     public static void bind(int lightingIndex) {
-        glBindSampler(lightingIndex, LM_SAMPLER);
+        glBindSampler(lightingIndex, GlSampler.ID);
         glBindTextureUnit(lightingIndex, getLightmapTextureId());
     }
 

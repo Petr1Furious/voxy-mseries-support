@@ -12,6 +12,13 @@ import static org.lwjgl.opengl.GL11C.*;
 
 public record RenderProperties(boolean isZero2One, boolean isReverseZ, boolean useBlockAtlasUVs) {
 
+    public java.util.Map<String, String> gpuShaderDefines() {
+        var defines = new java.util.HashMap<String, String>();
+        if (this.isZero2One) defines.put("USE_ZERO_ONE_DEPTH", "1");
+        if (this.isReverseZ) defines.put("USE_REVERSE_Z", "1");
+        return java.util.Map.copyOf(defines);
+    }
+
     public <T extends Shader.Builder<J>, J extends Shader> T apply(T builder) {
         return (T) builder.defineIf("USE_ZERO_ONE_DEPTH", this.isZero2One)
                 .defineIf("USE_REVERSE_Z", this.isReverseZ);

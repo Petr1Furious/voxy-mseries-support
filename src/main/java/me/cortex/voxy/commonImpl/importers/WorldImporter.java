@@ -62,6 +62,8 @@ public class WorldImporter implements IDataImporter {
     private final Service service;
 
     private volatile boolean isRunning;
+    private volatile boolean completedSuccessfully;
+    public boolean wasSuccessful() { return this.completedSuccessfully; }
 
     public WorldImporter(WorldEngine worldEngine, Level mcWorld, ServiceManager sm, BooleanSupplier runChecker) {
         this.world = worldEngine;
@@ -287,6 +289,8 @@ public class WorldImporter implements IDataImporter {
                 this.worker = null;
                 this.service.shutdown();
                 this.world.releaseRef();
+                this.completedSuccessfully = true;
+                this.isRunning = false;
             }
             this.completionCallback.onCompletion(this.totalChunks.get());
         });
