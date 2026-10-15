@@ -2,7 +2,9 @@
 
 Proposed title: **Experimental Minecraft 26.3 Metal renderer port with GPU regression coverage**
 
-Proposed target: a maintainer-approved experimental Minecraft 26.3 branch. Current fork `dev` targets 1.21.11; this candidate is based on upstream `263` (`61c1dee5`) and must not be presented as a small fix to `dev`.
+Proposed base: `srjefers/voxy-mseries-support:experimental/minecraft-26.3`. Proposed head: `udmuri/voxy-mseries-support:contribution/metal-26.3`. These are planned endpoints, not existing published work.
+
+Read-only review on 2026-10-16 confirmed that the experimental upstream branch does not exist and the authenticated contributor has pull-only access. An upstream maintainer must create/approve the target; no contributor command should create or modify upstream branches. Recommended starting point: upstream Voxy 26.3 commit `61c1dee5077c73fced865025430c6ce7dc87537c`. If maintainers choose another base, recompute the full PR diff and integration conflicts before publication. Current fork `dev` targets 1.21.11; this candidate must not be presented as a small fix to `dev`.
 
 ## Problem and result
 
@@ -18,7 +20,7 @@ Voxy 26.3 relies on rendering/storage APIs and shader layouts that differ from t
 
 ## Verified tests
 
-On 2026-10-16, Apple M3 / 8 GB / macOS 26.6, Temurin JDK 25.0.4.1: fresh-worktree build passed, followed by forced uncached `build` plus all 25 GPU tasks with `MTL_DEBUG_LAYER=1`. Result: 33 tasks executed, build successful; all 25 GPU JVMs confirmed Metal API Validation. Coverage includes production shader/command execution, terrain and final GL pixels, depth/IOSurface sharing, hierarchy/cleanup, atlas/mips, SSAO and maximal draw capacity. See `docs/TESTING.md` for exact commands and artifact identity. Root license/native embedding checks passed.
+On 2026-10-16, Apple M3 / 8 GB / macOS 26.6, Temurin JDK 25.0.4.1: fresh-worktree build passed, followed by forced uncached `build` plus all 25 GPU tasks with `MTL_DEBUG_LAYER=1`. Result: 33 tasks executed, build successful; all 25 GPU JVMs confirmed Metal API Validation. Coverage includes production shader/command execution, terrain and final GL pixels, depth/IOSurface sharing, hierarchy/cleanup, atlas/mips, SSAO and maximal draw capacity. See `docs/TESTING.md` for exact commands and artifact identity. Root license/native embedding checks passed. The recorded artifact belongs to code/test snapshot `1700a5da`; subsequent documentation commits do not constitute a new build or gameplay acceptance.
 
 ## Limitations and integration risks
 
