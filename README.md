@@ -2,7 +2,7 @@
 
 Native Apple Metal renders Voxy LODs; Minecraft and the final IOSurface compositor use OpenGL. This is an experimental version port, **NOT an official Voxy release**.
 
-**Publication status: experimental release authorized by the owner.** The owner reports redistribution permissions obtained from relevant Voxy/Metal rights holders and explicitly authorized publication despite incomplete native notice coverage. This is not a claim of complete third-party notice compliance.
+**[Experimental pre-release and JAR](https://github.com/udmur1/voxy-mseries-support/releases/tag/metal-26.3-experimental.1).** The owner reports redistribution permissions obtained from relevant Voxy/Metal rights holders and explicitly authorized publication despite incomplete native notice coverage. This is not a claim of complete third-party notice compliance.
 
 | Component | Development target |
 | --- | --- |
@@ -15,6 +15,8 @@ Native Apple Metal renders Voxy LODs; Minecraft and the final IOSurface composit
 | Validation host | Apple M3, 8 GB, macOS 26.6 (25G72) |
 
 Other chips and OS versions are unverified. The native macOS 12 deployment target is not a tested minimum. Fabric metadata accepts broader ranges than the tested development versions.
+
+Download the JAR and `SHA256SUMS` from the pre-release, then follow the [Prism installation guide](docs/INSTALLATION.md). Sources are on `contribution/metal-26.3`. The release JAR was built/tested at `6748c7c1`; subsequent commits update documentation only.
 
 ## Build and test
 

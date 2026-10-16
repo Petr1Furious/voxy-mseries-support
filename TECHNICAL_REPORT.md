@@ -1,6 +1,6 @@
 # Experimental unofficial Voxy Metal 26.3 — technical release audit
 
-**EXPERIMENTAL / UNOFFICIAL / NOT an official Voxy release.** Audit date: 2026-10-16 (Asia/Tbilisi). This document records local preparation and verified evidence; it does not announce a public release.
+**EXPERIMENTAL / UNOFFICIAL / NOT an official Voxy release.** Audit date: 2026-10-16 (Asia/Tbilisi). This document records verified evidence for the [experimental pre-release](https://github.com/udmur1/voxy-mseries-support/releases/tag/metal-26.3-experimental.1). Publication does not establish production readiness.
 
 ## Provenance and scope
 
@@ -45,8 +45,10 @@ No fresh gameplay, controlled FPS comparison, full RAM measurement or production
 
 The owner states that relevant rights holders have granted redistribution permissions for this port. The original root license and attribution remain intact; no permissive relicense or sublicense is inferred, and the agreement itself is not reproduced. Third-party obligations remain separate. [Dependency review](docs/RIGHTS_AND_DEPENDENCIES.md) and the [notice bundle](third-party/README.md) list exact collected evidence and unresolved native/transitive coverage. Partial notices do not clear a binary release. The owner subsequently explicitly authorized publication despite this unresolved notice coverage; it remains disclosed and is not represented as cleared.
 
-Active GitHub account was confirmed through API as `udmur1`; upstream access is pull-only. Proposed destination is a fork at `udmur1/voxy-mseries-support`, branch `contribution/metal-26.3`, with a proposed pre-release tag `metal-26.3-experimental.1`. The owner explicitly confirmed these publication destinations; publication status is recorded separately. No suitable Minecraft 26.3 target exists in srjefers' checked branch list. Recommend that the upstream owner create/approve `experimental/minecraft-26.3` from the agreed 26.3 baseline, then review a draft cross-fork PR. Do not force this port into 1.21.11 `dev` and do not modify upstream branches. The [PR draft](docs/PR_DRAFT.md) is local only.
+Active GitHub account was confirmed through API as `udmur1`; upstream access is pull-only. Published destination: [udmur1/voxy-mseries-support](https://github.com/udmur1/voxy-mseries-support), branch `contribution/metal-26.3`, pre-release tag `metal-26.3-experimental.1`. No suitable Minecraft 26.3 target exists in srjefers' checked branch list. Recommend that the upstream owner create/approve `experimental/minecraft-26.3` from the agreed 26.3 baseline, then review a draft cross-fork PR. Do not force this port into 1.21.11 `dev` and do not modify upstream branches. The [PR draft](docs/PR_DRAFT.md) is local only.
 
 Credits: MCRcortex and Voxy contributors for the original mod; srjefers and all contributors to voxy-mseries-support for the Metal/GPU/IOSurface foundation; dependency authors retain their notices. This work implies no endorsement from upstream authors.
 
 **Most implementation work was AI-assisted using OpenAI Codex**, including implementation, debugging, tests, documentation and release preparation. Human review remains necessary. Statements about results are restricted to executed checks; AI-generated explanations are not correctness evidence.
+
+Publication links were shared with srjefers in the [existing Minecraft 26.3 discussion](https://github.com/srjefers/voxy-mseries-support/issues/23#issuecomment-6212634176). The upstream target branch remains to be agreed before a compatible PR is opened.

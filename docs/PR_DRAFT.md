@@ -2,7 +2,7 @@
 
 Proposed title: **Experimental Minecraft 26.3 Metal renderer port with GPU regression coverage**
 
-Proposed base: `srjefers/voxy-mseries-support:experimental/minecraft-26.3`. Proposed head: `udmur1/voxy-mseries-support:contribution/metal-26.3`. These are planned endpoints, not existing published work.
+Proposed base: `srjefers/voxy-mseries-support:experimental/minecraft-26.3`. Proposed head: `udmur1/voxy-mseries-support:contribution/metal-26.3`. The head is published; the proposed upstream base does not yet exist.
 
 Read-only review on 2026-10-16 confirmed that the experimental upstream branch does not exist and the authenticated contributor has pull-only access. An upstream maintainer must create/approve the target; no contributor command should create or modify upstream branches. Recommended starting point: upstream Voxy 26.3 commit `61c1dee5077c73fced865025430c6ce7dc87537c`. If maintainers choose another base, recompute the full PR diff and integration conflicts before publication. Current fork `dev` targets 1.21.11; this candidate must not be presented as a small fix to `dev`.
 
@@ -34,4 +34,4 @@ Voxy: MCRcortex and upstream contributors. Metal/GPU/IOSurface foundation: srjef
 
 AI-assisted development: Most implementation work was AI-assisted using OpenAI Codex, including code, tests, documentation and contribution preparation. Human review remains necessary; executed tests are explicitly separated from unverified claims.
 
-`LICENSE.md` prohibits redistribution. The owner reports permission from the relevant Voxy/Metal rights holders for redistribution. This does not relicense upstream code. Native third-party notice coverage, Sodium terms and optional GPL/LGPL integration obligations remain under review; the owner subsequently explicitly authorized experimental publication despite the unresolved native notice issue. This draft is local, grants no rights, and includes no uploaded artifacts.
+`LICENSE.md` prohibits redistribution. The owner reports permission from the relevant Voxy/Metal rights holders for redistribution. This does not relicense upstream code. Native third-party notice coverage, Sodium terms and optional GPL/LGPL integration obligations remain under review; the owner subsequently explicitly authorized experimental publication despite the unresolved native notice issue. This draft grants no rights. The [experimental pre-release](https://github.com/udmur1/voxy-mseries-support/releases/tag/metal-26.3-experimental.1) contains the tested JAR and checksum. Links were [shared with srjefers](https://github.com/srjefers/voxy-mseries-support/issues/23#issuecomment-6212634176); a compatible upstream target is awaiting agreement.

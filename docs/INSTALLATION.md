@@ -2,6 +2,8 @@
 
 **EXPERIMENTAL / UNOFFICIAL — NOT an official Voxy release.** These instructions prepare a separate test instance; this audit did not modify or retest an existing Prism installation. The owner authorized an experimental pre-release despite incomplete native notice coverage; this outstanding issue remains disclosed in the release notes.
 
+Download: [metal-26.3-experimental.1](https://github.com/udmur1/voxy-mseries-support/releases/tag/metal-26.3-experimental.1). Use its JAR and `SHA256SUMS`; source-archive ZIP files are not installable mod JARs.
+
 ## Tested build target
 
 Minecraft 26.3, Fabric Loader 0.19.5, Fabric API 0.160.5+26.3, Sodium mc26.3-0.9.3-alpha.1-fabric, arm64 JDK 25. Only Apple M3 / 8 GB / macOS 26.6 has the current component-test evidence. A macOS 12 native deployment target does not establish a supported minimum. The mod metadata accepts broader dependency ranges; other versions are unverified.

@@ -16,7 +16,7 @@ Local artifact: `voxy-metal-0.2.20-metal.26.3.experimental.1-6748c7c.jar`.
 SHA-256 52b88918d3cfa8b52c4475d67340bd32ab42a6101008fed58098873f38dffd39
 ```
 
-Candidate JAR, `SHA256SUMS` and a detailed verification manifest are staged under ignored `build/release-candidate`. Raw logs remain outside tracked source because they contain host paths. No binaries were uploaded.
+Candidate JAR, `SHA256SUMS` and a detailed verification manifest are staged under ignored `build/release-candidate`. Raw logs remain outside tracked source because they contain host paths. The tested JAR and `SHA256SUMS` were subsequently published in the [experimental pre-release](https://github.com/udmur1/voxy-mseries-support/releases/tag/metal-26.3-experimental.1). Raw logs and native-inspection working files were not uploaded.
 
 JAR checks passed: experimental version/name metadata; embedded source commit; root license bytes identical to `LICENSE.md`; all 15 collected third-party notice texts match their recorded SHA-256; Metal JNI matches the fresh resource byte-for-byte. Mach-O inspection confirmed arm64 for every required native payload below.
 
