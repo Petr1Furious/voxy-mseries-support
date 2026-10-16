@@ -1,6 +1,6 @@
 # Publication status — 2026-10-16
 
-No fork, source push, GitHub release, binary upload or pull request was created during this workflow. No upstream branch, original source checkout or working Prism installation was modified. The contribution branch has only additive local commits; no history was rewritten.
+The owner explicitly authorized creation of udmur1/voxy-mseries-support, upload of contribution/metal-26.3, an experimental JAR pre-release, and sharing its link with srjefers. Publication was not yet performed at this documentation snapshot. No upstream branch, original source checkout or working Prism installation was modified. The contribution branch has only additive local commits; no history was rewritten.
 
 ## Confirmed account and remotes
 
@@ -20,9 +20,9 @@ The shared Git ancestry makes a fork appropriate even though the architecture/ve
 
 ## Blocking conditions
 
-The owner explicitly reports Voxy/Metal redistribution permissions obtained; no repeat confirmation of that statement is requested. However, exact full compiler/native/transitive notice coverage remains unresolved (see third-party/README.md and docs/RIGHTS_AND_DEPENDENCIES.md). The local JAR contains the verified notices collected so far, not a certified complete bundle. This is the current reason to stop publication under the owner's instructions.
+The owner explicitly reports Voxy/Metal redistribution permissions obtained; no repeat confirmation of that statement is requested. However, exact full compiler/native/transitive notice coverage remains unresolved (see third-party/README.md and docs/RIGHTS_AND_DEPENDENCIES.md). The local JAR contains the verified notices collected so far, not a certified complete bundle. The owner subsequently explicitly waived this stop and authorized publication despite the outstanding notice issue. No complete third-party compliance claim is made.
 
-Once that blocker is resolved, obtain the owner's explicit confirmation of account and exact publication destinations before the first public push/release. Recheck authentication at that time. Fork/source/release operations must use explicit repository and ref names; no force push, tag overwrite or upstream writes. Release assets should be the single verified JAR and SHA256SUMS, not a wildcard over native-inspection files. Do not launch the inherited manual-artifact workflow.
+The owner confirmed account udmur1 and destination udmur1/voxy-mseries-support in the publication instruction. Recheck authentication before publication. Fork/source/release operations must use explicit repository and ref names; no force push, tag overwrite or upstream writes. Release assets should be the single verified JAR and SHA256SUMS, not a wildcard over native-inspection files. Do not launch the inherited manual-artifact workflow.
 
 Git commit identity currently includes a local machine hostname in its email. History is preserved as requested; changing the GitHub authentication account does not change existing commit authors. Resolve desired future author metadata separately without rewriting these commits.
 

@@ -2,7 +2,7 @@
 
 ## Final pre-release candidate verified on 2026-10-16
 
-Status: **local EXPERIMENTAL / UNOFFICIAL candidate; publication blocked by incomplete third-party native notice coverage**. The owner reports Voxy/Metal redistribution permissions separately.
+Status: **EXPERIMENTAL / UNOFFICIAL candidate; publication explicitly authorized by the owner despite incomplete third-party native notice coverage**. The owner reports Voxy/Metal redistribution permissions separately.
 
 Host: Apple M3 / 8 GB / macOS 26.6 (25G72), arm64 Temurin JDK 25.0.4.1. Tested snapshot: `6748c7c10da1abaf436486efd75fa23abe028f2e`. Later commits record these results and do not change executable code or the tested JAR.
 
@@ -31,7 +31,7 @@ JAR checks passed: experimental version/name metadata; embedded source commit; r
 
 Minecraft/Loom supplies runtime LWJGL core/GL/GLFW. This verification does not claim the Voxy JAR contains the complete Minecraft runtime. The tests use the compiled runtime classpath and freshly built native library; ZIP inspection establishes that the same JNI bytes are in the JAR. It is not a launcher gameplay acceptance test.
 
-The warning/limitation and manual-acceptance notes below still apply. No fresh FPS, full RAM measurement, launcher installation or gameplay result is claimed. Required native notice completeness remains a release blocker despite passing validation.
+The warning/limitation and manual-acceptance notes below still apply. No fresh FPS, full RAM measurement, launcher installation or gameplay result is claimed. Native notice completeness remains unresolved despite passing validation; the owner explicitly waived the previous publication stop. No complete compliance claim is made.
 
 ## Earlier contribution validation (historical)
 

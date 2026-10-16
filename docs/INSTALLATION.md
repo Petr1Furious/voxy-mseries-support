@@ -1,6 +1,6 @@
 # Prism Launcher installation and troubleshooting
 
-**EXPERIMENTAL / UNOFFICIAL — NOT an official Voxy release.** These instructions prepare a separate test instance; this audit did not modify or retest an existing Prism installation. No publicly approved release is available from this work yet. Do not distribute the local candidate while third-party notice coverage remains unresolved.
+**EXPERIMENTAL / UNOFFICIAL — NOT an official Voxy release.** These instructions prepare a separate test instance; this audit did not modify or retest an existing Prism installation. The owner authorized an experimental pre-release despite incomplete native notice coverage; this outstanding issue remains disclosed in the release notes.
 
 ## Tested build target
 

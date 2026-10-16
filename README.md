@@ -2,7 +2,7 @@
 
 Native Apple Metal renders Voxy LODs; Minecraft and the final IOSurface compositor use OpenGL. This is an experimental version port, **NOT an official Voxy release**.
 
-**Publication status: local candidate only.** The owner reports that redistribution permissions have been obtained from relevant Voxy/Metal rights holders. Third-party native notice coverage remains incomplete, so no public binary release is cleared by this audit.
+**Publication status: experimental release authorized by the owner.** The owner reports redistribution permissions obtained from relevant Voxy/Metal rights holders and explicitly authorized publication despite incomplete native notice coverage. This is not a claim of complete third-party notice compliance.
 
 | Component | Development target |
 | --- | --- |
@@ -53,4 +53,4 @@ Original Voxy: [MCRcortex](https://github.com/MCRcortex/voxy). Native Metal/GPU 
 
 **Most implementation work was AI-assisted using OpenAI Codex**, including port development, tests, review, documentation, and contribution preparation. AI-generated explanations are not evidence of correctness; the testing document separates executed checks from remaining manual acceptance. Human maintainers should review code and rights before integration.
 
-[LICENSE.md](LICENSE.md) retains the original restrictive notice. The owner reports that the relevant rights holders granted redistribution permission; this statement does not relicense upstream code or grant additional rights to recipients. The exact agreement is not reproduced here. See [rights and dependency status](docs/RIGHTS_AND_DEPENDENCIES.md) and [bundled notices](third-party/README.md). Missing third-party notice coverage still blocks publication.
+[LICENSE.md](LICENSE.md) retains the original restrictive notice. The owner reports that the relevant rights holders granted redistribution permission; this statement does not relicense upstream code or grant additional rights to recipients. The exact agreement is not reproduced here. See [rights and dependency status](docs/RIGHTS_AND_DEPENDENCIES.md) and [bundled notices](third-party/README.md). Third-party notice coverage remains incomplete and is disclosed; the owner explicitly authorized publication with this outstanding issue.
