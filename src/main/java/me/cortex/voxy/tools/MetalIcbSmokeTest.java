@@ -175,7 +175,7 @@ public final class MetalIcbSmokeTest {
 
                 enc.executeCommandsInBuffer(icb, rangeBuf, 0);
             }
-            backend.submit();
+            backend.finish();
 
             byte[] pixels = backend.readPixelsRGBA8(target, 0, 0, W, H);
 

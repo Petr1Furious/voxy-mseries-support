@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.interop;
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gpu.IGpuTexture;
 import me.cortex.voxy.client.core.metal.MetalRenderBackend;
+import me.cortex.voxy.client.core.util.FrameTiming;
 import org.joml.Matrix4fc;
 import org.lwjgl.system.MemoryStack;
 
@@ -140,16 +141,23 @@ public final class GlMetalFrameBridge implements AutoCloseable {
     public IGpuTexture colorTarget() { requireFrame(); return colorOutput.bridge.asGpuTexture(); }
     public IGpuTexture depthTarget() { requireFrame(); return depthOutput.bridge.asGpuTexture(); }
 
+    /**
+     * Full CPU waits at every GL/Metal hand-off (the previous behaviour). By default the bridge relies on
+     * submission ordering of the shared IOSurfaces: glFlush before Metal reads GL output, and Metal work
+     * scheduled before GL reads Metal output.
+     */
+    private static final boolean SYNC_INTEROP = Boolean.getBoolean("voxy.metal.syncInterop");
+
     /** Called before Metal starts a new frame. Source textures are ordinary Minecraft GL_TEXTURE_2D textures. */
     public void copyInputs(int sourceDepth, int sourceLightmap) {
         requireFrame();
-        backend.finish();
+        if (SYNC_INTEROP) backend.finish();
         try (var state = new State()) {
             rasterState(); glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDepthMask(false);
             glUseProgram(copyProgram); glUniform1i(glGetUniformLocation(copyProgram, "sourceTexture"), 0);
             copy(sourceDepth, depthInput); copy(sourceLightmap, lightInput);
             // Complete GL readers of last frame and GL writers of this frame before Metal uses shared storage.
-            glFinish();
+            handOff();
         }
     }
 
@@ -191,7 +199,7 @@ public final class GlMetalFrameBridge implements AutoCloseable {
                           float[] fog, float[] fogColor, float[] fade) {
         requireFrame();
         if (fog.length != 4 || fogColor.length != 4 || fade.length != 4) throw new IllegalArgumentException("Expected vec4 composition parameters");
-        backend.finish();
+        if (SYNC_INTEROP) backend.finish(); else backend.submitScheduled();
         try (var state = new State(); var stack = MemoryStack.stackPush()) {
             rasterState(); glEnable(GL_DEPTH_TEST); glDepthMask(true); glDepthFunc(properties.closerEqualDepthCompare());
             glEnable(GL_BLEND); glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
@@ -210,8 +218,14 @@ public final class GlMetalFrameBridge implements AutoCloseable {
             glUniform4fv(glGetUniformLocation(compositeProgram, "fadeParameters"), fade);
             glDrawArrays(GL_TRIANGLES, 0, 3);
             // The next Metal frame may overwrite these surfaces only after GL finishes sampling them.
-            glFinish();
+            handOff();
         }
+    }
+
+    private static void handOff() {
+        long start = FrameTiming.ENABLED ? System.nanoTime() : 0;
+        if (SYNC_INTEROP) glFinish(); else glFlush();
+        if (FrameTiming.ENABLED) { FrameTiming.glFinishNs += System.nanoTime() - start; FrameTiming.glFinishCount++; }
     }
 
     private void rasterState() {

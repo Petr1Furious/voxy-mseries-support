@@ -1,0 +1,35 @@
+#version 450
+
+// Metal has no draw-count-from-buffer. The CPU encodes a fixed number of draws per layer
+// (its bounds) without waiting for command generation, so commands between the generated
+// count and the bound are cleared to empty draws. Thread 0 records the counts for the CPU
+// to size later bounds.
+layout(local_size_x = 256) in;
+
+#define DRAW_BUFFER_BINDING 1
+#define DRAW_COUNT_BUFFER_BINDING 2
+
+#import <voxy:lod/gl46/bindings.glsl>
+
+layout(binding = 3, std430) writeonly restrict buffer CountHistory {
+    uvec4 countHistory[];
+};
+
+layout(binding = 4, std140) uniform PadBounds {
+    uvec4 bounds;// opaque, translucent, temporal, history slot
+};
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint layer = gl_GlobalInvocationID.y;
+    if (i == 0 && layer == 0) {
+        countHistory[bounds.w] = uvec4(opaqueDrawCount, translucentDrawCount, temporalOpaqueDrawCount, cullDrawIndirectCommand.instanceCount);
+    }
+    uint count = layer == 0 ? opaqueDrawCount : layer == 1 ? translucentDrawCount : temporalOpaqueDrawCount;
+    uint bound = bounds[layer];
+    if (i < count || i >= bound) {
+        return;
+    }
+    uint base = layer == 0 ? 0u : layer == 1 ? TRANSLUCENT_OFFSET : TEMPORAL_OFFSET;
+    cmdBuffer[base + i] = DrawCommand(0u, 0u, 0u, 0, 0u);
+}

@@ -50,7 +50,7 @@ public final class MetalDevelopmentWorld {
                 client.createWorldOpenFlows().openWorld(worldName, () -> {});
                 return;
             }
-            String name = worldName = "Metal-acceptance-" + System.currentTimeMillis();
+            String name = worldName = System.getProperty("voxy.dev.newWorldName", "Metal-acceptance-" + System.currentTimeMillis());
             Logger.info("Creating new Metal acceptance world " + name);
             client.createWorldOpenFlows().createFreshLevel(name,
                     new LevelSettings(name, GameType.CREATIVE, LevelSettings.DifficultySettings.DEFAULT, true, WorldDataConfiguration.DEFAULT),
@@ -68,6 +68,10 @@ public final class MetalDevelopmentWorld {
         if (client.level == null || client.player == null || client.getConnection() == null || client.gui.overlay() != null) return;
         worldTicks++;
         if (System.getProperty("voxy.dev.existingWorld") != null) {
+            if (MetalPerfBenchmark.ENABLED) {
+                MetalPerfBenchmark.tick(client, worldTicks);
+                return;
+            }
             if (Boolean.getBoolean("voxy.dev.lodBenchmark")) {
                 MetalLodBenchmark.tick(client, worldTicks);
                 return;
@@ -85,6 +89,15 @@ public final class MetalDevelopmentWorld {
             }
             if (worldTicks % 120 == 0) Screenshot.grab(client, false);
             if (worldTicks == 1000) { Logger.info("Copied-world Metal stability capture complete"); client.stop(); }
+            return;
+        }
+        if (Integer.getInteger("voxy.dev.perfPrepare") != null) {
+            // Generates the shared benchmark world: Chunky terrain around the benchmark cameras, imported into Voxy.
+            if (worldTicks == 20) { client.getConnection().sendCommand("gamemode spectator"); client.getConnection().sendCommand("tp @s 0 120 0"); }
+            if (worldTicks == 60) me.cortex.voxy.client.LodPreparation.arm(client, Integer.getInteger("voxy.dev.perfPrepare"));
+            if (worldTicks > 60 && me.cortex.voxy.client.LodPreparation.ready(client) && ++readyTicks == 100) {
+                Logger.info("Perf benchmark world prepared: " + worldName); client.stop();
+            }
             return;
         }
         if (Boolean.getBoolean("voxy.dev.preparation")) {

@@ -212,9 +212,11 @@ public class HierarchicalOcclusionTraverser {
             MemoryUtil.memPutInt(metadata + i * 16L + 12, i == 0 ? this.topNodeCount : 0);
         }
         this.uploads.commit();
+        me.cortex.voxy.client.core.util.FrameTiming.split(this.backend, "4d0 traversalSetup");
         this.gpuTraversal.traverse(new GpuHierarchicalTraversal.Buffers(this.uniformBuffer, this.requestBuffer,
                 viewport.getRenderList(), this.nodeBuffer, this.queueMetaBuffer, this.topNodeIds, this.scratchQueueA,
                 this.scratchQueueB, this.nodeCleaner.visibilityBuffer, this.statisticsBuffer), viewport.hiZBuffer.getTexture(), this.topNodeCount);
+        me.cortex.voxy.client.core.util.FrameTiming.split(this.backend, "4d1 traversalKernel");
         this.downloads.download(this.requestBuffer, this::forwardDownloadResult);
         if (RenderStatistics.enabled) {
             this.downloads.download(this.statisticsBuffer, down -> {

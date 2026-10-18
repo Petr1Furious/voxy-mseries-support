@@ -32,6 +32,9 @@ public final class MetalRawReadbackSmokeTest {
                     encoder.dispatch(1, 1, 1);
                 }
             }
+            // Submission is asynchronous: wait for the fenced frame before collecting callbacks.
+            readback.submit();
+            backend.finish();
             readback.tick();
             if (callbacks.get() != 40) throw new IllegalStateException("Lost raw readback callbacks");
             try {

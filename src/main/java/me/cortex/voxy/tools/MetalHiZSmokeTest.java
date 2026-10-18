@@ -39,7 +39,7 @@ public final class MetalHiZSmokeTest {
                                 }
                                 source.uploadSubImage2D(0, 0, 0, sourceWidth, sourceHeight, 0x1903, 0x1406, pixels.address);
                                 hiz.buildMipChain(source, sourceWidth, sourceHeight);
-                                backend.submit();
+                                backend.finish();
                                 var pyramid = hiz.getTexture();
                                 int width = Integer.highestOneBit(sourceWidth), height = Integer.highestOneBit(sourceHeight);
                                 if (hiz.getPackedLevels() != ((width << 16) | height)) throw new IllegalStateException("HiZ packed dimensions changed");
@@ -78,7 +78,7 @@ public final class MetalHiZSmokeTest {
                                     .depthAttachment(depthTarget, 0, RenderPassDesc.LoadAction.CLEAR,
                                             RenderPassDesc.StoreAction.STORE, 0.37f).build())) {}
                             hiz.buildMipChain(depthTarget, 32, 16);
-                            backend.submit();
+                            backend.finish();
                             var pyramid = hiz.getTexture();
                             var view = pyramid.createView(pyramid.getLevels() - 1, 1);
                             try {

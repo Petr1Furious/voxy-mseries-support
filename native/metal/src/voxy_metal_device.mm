@@ -105,3 +105,24 @@ Java_me_cortex_voxy_client_core_metal_MetalNative_mtlCommandBufferGetStatus(
         return (jint)[cmdBuf status];
     }
 }
+
+// GPU execution span of a completed command buffer in seconds (profiling only).
+extern "C" JNIEXPORT jdouble JNICALL
+Java_me_cortex_voxy_client_core_metal_MetalNative_mtlCommandBufferGPUTime(
+        JNIEnv *, jclass, jlong cmdBufHandle) {
+    @autoreleasepool {
+        if (cmdBufHandle == 0) return 0;
+        id<MTLCommandBuffer> cmdBuf = voxy_handle_cast<id<MTLCommandBuffer>>(cmdBufHandle);
+        return (jdouble)([cmdBuf GPUEndTime] - [cmdBuf GPUStartTime]);
+    }
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_me_cortex_voxy_client_core_metal_MetalNative_mtlCommandBufferWaitUntilScheduled(
+        JNIEnv *, jclass, jlong cmdBufHandle) {
+    @autoreleasepool {
+        if (cmdBufHandle == 0) return;
+        id<MTLCommandBuffer> cmdBuf = voxy_handle_cast<id<MTLCommandBuffer>>(cmdBufHandle);
+        [cmdBuf waitUntilScheduled];
+    }
+}

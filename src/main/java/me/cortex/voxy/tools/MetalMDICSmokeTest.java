@@ -55,7 +55,7 @@ public final class MetalMDICSmokeTest {
                         }
                         viewport.depthBoundingBuffer.clear(properties.clearDepth());
                         viewport.frameId = 7;
-                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex());
+                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex()); backend.finish();
                         checkCounts(viewport, 3, 3, 3);
                         checkCommands(viewport, true);
                         long visibility = ((MetalBuffer) viewport.visibilityBuffer).getContentsPtr();
@@ -65,16 +65,22 @@ public final class MetalMDICSmokeTest {
                         long stats = ((MetalBuffer) calls.getStatistics()).getContentsPtr();
                         if (MemoryUtil.memGetInt(stats) != 3 || MemoryUtil.memGetInt(stats + 20) != 9) throw new AssertionError("MDIC statistics");
                         viewport.frameId = 8;
-                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex());
+                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex()); backend.finish();
                         checkCounts(viewport, 3, 3, 0);
                         checkCommands(viewport, false);
+                        // Last frame's temporal commands are stale: padding must turn them into empty draws.
+                        if (viewport.metalDraws.bound(2) < 3) throw new AssertionError("Temporal bound below history");
+                        for (int i = 0; i < 3; i++) {
+                            long command = ((MetalBuffer) viewport.drawCallBuffer).getContentsPtr() + GpuMDICDrawCalls.TEMPORAL_OFFSET + i * 20L;
+                            if (MemoryUtil.memGetInt(command) != 0 || MemoryUtil.memGetInt(command + 4) != 0) throw new AssertionError("Stale temporal command not padded");
+                        }
                         for (int i = 0; i < 3; i++) {
                             if (MemoryUtil.memGetInt(visibility + 4L * i) != (8 | 0x80000000)) throw new AssertionError("Previous-frame visibility bit");
                         }
                         // All cube fragments lie behind this actual depth attachment.
                         viewport.depthBoundingBuffer.clear(properties.inverseClearDepth());
                         viewport.frameId = 9;
-                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex());
+                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex()); backend.finish();
                         checkCounts(viewport, 0, 0, 0);
                         for (int i = 0; i < 3; i++) {
                             if (MemoryUtil.memGetInt(visibility + 4L * i) != (8 | 0x80000000)) throw new AssertionError("Occluded fragments wrote visibility");
@@ -82,7 +88,7 @@ public final class MetalMDICSmokeTest {
                         MemoryUtil.memPutInt(uploads.upload(viewport.indirectLookupBuffer, 0, 4), 0);
                         uploads.commit();
                         viewport.frameId = 10;
-                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex());
+                        calls.build(viewport, metadata, viewport.depthBoundingBuffer.getGpuDepthTex()); backend.finish();
                         checkCounts(viewport, 0, 0, 0);
                         if (MemoryUtil.memGetInt(((MetalBuffer) viewport.drawCountCallBuffer).getContentsPtr()) != 0) throw new AssertionError("Empty dispatch");
                     } finally {

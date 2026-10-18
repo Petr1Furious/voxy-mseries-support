@@ -19,7 +19,7 @@ public final class GpuMDICDrawCalls implements AutoCloseable {
     private final RenderBackend backend;
     private final UploadStream uploads;
     private final IGpuBuffer uniform, distances, statistics;
-    private final IGpuPipeline prep, cull, commands, prefix, translucents;
+    private final IGpuPipeline prep, cull, commands, prefix, translucents, pad;
     private final SharedIndexBuffer indices;
     private final RenderProperties properties;
 
@@ -50,6 +50,9 @@ public final class GpuMDICDrawCalls implements AutoCloseable {
             prefix = compute("util/prefixsum/simple.comp", Map.of("IO_BUFFER", "0"), 256, allocated);
             translucents = compute("lod/gl46/buildtranslucents.comp", Map.of("TRANSLUCENT_WRITE_BASE", "1024",
                     "TRANSLUCENT_OFFSET", Integer.toString(GpuMDICCapacity.OPAQUE), "TRANSLUCENT_DISTANCE_BUFFER_BINDING", "5"), 128, allocated);
+            pad = backend.getType() == BackendType.METAL ? compute("lod/gl46/metal_pad.comp", Map.of(
+                    "TRANSLUCENT_OFFSET", Integer.toString(GpuMDICCapacity.OPAQUE),
+                    "TEMPORAL_OFFSET", Integer.toString(GpuMDICCapacity.TEMPORAL_BASE)), 256, allocated) : null;
         } catch (RuntimeException | Error failure) {
             backend.finish();
             for (int i = allocated.size() - 1; i >= 0; i--) {
@@ -97,18 +100,14 @@ public final class GpuMDICDrawCalls implements AutoCloseable {
         MemoryUtil.memSet(uploads.upload(distances, 0, 4096), 0, 4096);
         MemoryUtil.memSet(uploads.upload(statistics, 0, 1024), 0, 1024);
         uploads.commit();
+        me.cortex.voxy.client.core.util.FrameTiming.split(backend, "5a0 uploads");
         try (var encoder = backend.beginComputePass()) {
             encoder.setPipeline(prep);
             encoder.setBuffer(1, viewport.drawCountCallBuffer, 0);
             encoder.setBuffer(2, viewport.indirectLookupBuffer, 0);
             encoder.dispatch(1, 1, 1);
         }
-        // The current Metal indirect encoder reads baseInstance from shared command memory.
-        backend.finish();
-        if (viewport.drawCountCallBuffer instanceof me.cortex.voxy.client.core.metal.MetalBuffer counts
-                && Integer.toUnsignedLong(MemoryUtil.memGetInt(counts.getContentsPtr() + 28)) > GpuMDICCapacity.SECTIONS) {
-            throw new IllegalStateException("Traversal render list exceeds MDIC section capacity");
-        }
+        me.cortex.voxy.client.core.util.FrameTiming.split(backend, "5a1 prep");
         try (var encoder = backend.beginRenderPass(RenderPassDesc.builder(viewport.width, viewport.height)
                 .depthAttachment(occlusionDepth, 0,
                         RenderPassDesc.LoadAction.LOAD, RenderPassDesc.StoreAction.STORE, 0).build())) {
@@ -122,6 +121,7 @@ public final class GpuMDICDrawCalls implements AutoCloseable {
             encoder.bindIndexBuffer(indices.getBuffer(), RenderEncoder.INDEX_TYPE_UINT16, indices.getCubeOffset());
             encoder.drawIndexedIndirect(RenderEncoder.PRIMITIVE_TRIANGLES, viewport.drawCountCallBuffer, 24, 1, 20);
         }
+        me.cortex.voxy.client.core.util.FrameTiming.split(backend, "5a cullRaster");
         try (var encoder = backend.beginComputePass()) {
             encoder.setPipeline(commands);
             encoder.setBuffer(0, uniform, 0);
@@ -147,14 +147,39 @@ public final class GpuMDICDrawCalls implements AutoCloseable {
             encoder.setBuffer(4, viewport.indirectLookupBuffer, 0);
             encoder.setBuffer(5, distances, 0);
             encoder.dispatchIndirect(viewport.drawCountCallBuffer, 0);
+            if (viewport.metalDraws != null) pad(encoder, viewport);
         }
-        // Makes counts and per-draw baseInstance safe for the Metal host encoding loop.
-        backend.finish();
+        me.cortex.voxy.client.core.util.FrameTiming.split(backend, "5b cmdgen");
+        if (viewport.metalDraws != null && viewport.metalDraws.needsExactCounts()) {
+            backend.finish();
+            viewport.metalDraws.exact(((me.cortex.voxy.client.core.metal.MetalBuffer) viewport.drawCountCallBuffer).getContentsPtr());
+        }
+    }
+
+    private void pad(ComputeEncoder encoder, MDICViewport viewport) {
+        var draws = viewport.metalDraws;
+        int slot = draws.next();
+        int widest = Math.max(draws.bound(0), Math.max(draws.bound(1), draws.bound(2)));
+        encoder.barrier(ComputeEncoder.BARRIER_SHADER, ComputeEncoder.BARRIER_SHADER);
+        encoder.setPipeline(pad);
+        encoder.setBuffer(1, viewport.drawCallBuffer, 0);
+        encoder.setBuffer(2, viewport.drawCountCallBuffer, 0);
+        encoder.setBuffer(3, draws.history(), 0);
+        try (var stack = org.lwjgl.system.MemoryStack.stackPush()) {
+            long bounds = stack.nmalloc(16, 16);
+            MemoryUtil.memPutInt(bounds, draws.bound(0));
+            MemoryUtil.memPutInt(bounds + 4, draws.bound(1));
+            MemoryUtil.memPutInt(bounds + 8, draws.bound(2));
+            MemoryUtil.memPutInt(bounds + 12, slot);
+            encoder.setBytes(4, bounds, 16);
+        }
+        encoder.dispatch(Math.max(1, (widest + 255) / 256), 3, 1);
     }
 
     @Override
     public void close() {
         backend.finish();
+        if (pad != null) pad.close();
         translucents.close(); prefix.close(); commands.close(); cull.close(); prep.close();
         indices.close(); statistics.free(); distances.free(); uniform.free();
     }

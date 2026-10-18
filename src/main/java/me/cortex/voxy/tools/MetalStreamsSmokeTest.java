@@ -36,6 +36,9 @@ public final class MetalStreamsSmokeTest {
                 });
                 if (completed.get() != 0) throw new IllegalStateException("Callback ran before fence processing");
                 downloads.tick();
+                // Submission is asynchronous: the callback runs once the fence has signalled.
+                backend.finish();
+                downloads.tick();
                 downloads.tick();
                 if (completed.get() != 1) throw new IllegalStateException("Callback must run exactly once");
             }
@@ -68,6 +71,7 @@ public final class MetalStreamsSmokeTest {
                         encoder.dispatch(1, 1, 1);
                     }
                     uploads.tick();
+                    backend.finish();
                     if (MemoryUtil.memGetInt(target.getContentsPtr() + 28) != sections) {
                         throw new IllegalStateException("Raw staging reuse corrupted prep input");
                     }

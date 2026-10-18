@@ -31,7 +31,7 @@ public final class Voxy26ComputeSmokeTest {
                             encoder.setBuffer(2, lookup, 0);
                             encoder.dispatch(1, 1, 1);
                         }
-                        backend.submit();
+                        backend.finish();
                         int[] expected = {(count + 127) / 128, 1, 1, 0, 0, 0, 36, count, 786432, 0, 0};
                         for (int i = 0; i < expected.length; i++) {
                             int actual = MemoryUtil.memGetInt(output.getContentsPtr() + i * 4L);

@@ -50,7 +50,7 @@ MTL_DEBUG_LAYER=1 ./gradlew build \
   testMetalNodeCleaner testMetalRawReadback testMetalHiZ testMetalTraversal \
   testMetalViewport testMetalMDIC testMetalTerrain testMetalBounds \
   testMetalTerrainIOSurface testMetalFrameBridge testMetalSsao testMetalMDICCapacity \
-  testMetalFrameFlow \
+  testMetalFrameFlow testMetalInteropOrdering testMetalBaseInstanceProbe \
   --no-build-cache --rerun-tasks --max-workers=2 --console=plain
 ```
 

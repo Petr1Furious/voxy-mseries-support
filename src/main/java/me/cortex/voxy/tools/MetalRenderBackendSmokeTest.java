@@ -52,7 +52,7 @@ public final class MetalRenderBackendSmokeTest {
                 // Empty pass — clear runs as the load action when the encoder is created.
                 if (enc == null) throw new RuntimeException("beginRenderPass returned null encoder");
             }
-            backend.submit();
+            backend.finish();
 
             System.out.println("M3 SMOKE OK — Metal clear-color render pass committed and completed");
             System.out.println("  Backend: " + backend.getType());

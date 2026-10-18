@@ -5,6 +5,7 @@ import me.cortex.voxy.client.core.interop.*;
 import me.cortex.voxy.client.core.metal.MetalRenderBackend;
 import me.cortex.voxy.client.core.rendering.section.backend.mdic.*;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
+import me.cortex.voxy.client.core.util.FrameTiming;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
@@ -54,26 +55,37 @@ public final class MetalFrameRenderer implements AutoCloseable {
                        IGpuBuffer geometry, IGpuBuffer metadata, Consumer<RenderEncoder> models,
                        Runnable primaryWork, float[] fog, float[] fogColor, float[] fade, boolean composite) {
         if (closed) throw new IllegalStateException("Metal frame renderer is closed");
-        long benchmarkStart = Boolean.getBoolean("voxy.dev.lodBenchmark") ? System.nanoTime() : 0;
+        long benchmarkStart = Boolean.getBoolean("voxy.dev.lodBenchmark") || FrameTiming.ENABLED ? System.nanoTime() : 0;
         resize(viewport, vanillaDepth, lightmap);
         bridge.copyInputs(vanillaDepth, lightmap);
         opaque.setVanillaDepth(bridge.inputDepth()); translucent.setVanillaDepth(bridge.inputDepth());
         depthPass.prepare(bridge.inputDepth(), depth, color);
         commands.updateScene(viewport);
+        FrameTiming.split(backend, "1 depthPrepare");
         if (prepared.contains(viewport)) draw(opaque, GpuMDICTerrain.Layer.OPAQUE, viewport, geometry, models, color);
+        FrameTiming.split(backend, "2 opaque");
+        // Start the frame's largest GPU pass while the CPU encodes HiZ and traversal.
+        backend.submit();
         viewport.hiZBuffer.buildMipChain(depth, viewport.width, viewport.height);
+        FrameTiming.split(backend, "3 hiz");
         // GPU uploads, node cleaning and hierarchical traversal are supplied by the owning render system.
         primaryWork.run();
+        FrameTiming.split(backend, "4 traversal");
         commands.build(viewport, metadata, depth);
         prepared.add(viewport);
         draw(opaque, GpuMDICTerrain.Layer.TEMPORAL, viewport, geometry, models, color);
+        FrameTiming.split(backend, "6 temporal");
         ssao.compute(viewport, bridge.colorTarget(), color, depth, bridge.inputDepth());
+        FrameTiming.split(backend, "7 ssao");
         draw(translucent, GpuMDICTerrain.Layer.TRANSLUCENT, viewport, geometry, models, bridge.colorTarget());
+        FrameTiming.split(backend, "8 translucent");
         depthPass.export(depth, bridge.depthTarget());
+        FrameTiming.split(backend, "9 export");
         if (composite) bridge.compositeToTextures(vanillaColor, vanillaDepth, viewport.MVP.invert(new Matrix4f()),
                 new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView), fog, fogColor, fade);
-        if (benchmarkStart != 0) me.cortex.voxy.tools.MetalLodBenchmark.frame(viewport, benchmarkStart, System.nanoTime() - benchmarkStart);
-        else if (Boolean.getBoolean("voxy.dev.world") && viewport.frameId % 240 == 0 && developmentCaptures++ < 48) captureDevelopmentFrame(viewport);
+        if (FrameTiming.ENABLED) { FrameTiming.voxyFrameNs += System.nanoTime() - benchmarkStart; FrameTiming.voxyFrames++; }
+        if (benchmarkStart != 0 && Boolean.getBoolean("voxy.dev.lodBenchmark")) me.cortex.voxy.tools.MetalLodBenchmark.frame(viewport, benchmarkStart, System.nanoTime() - benchmarkStart);
+        else if (Boolean.getBoolean("voxy.dev.world") && !FrameTiming.ENABLED && viewport.frameId % 240 == 0 && developmentCaptures++ < 48) captureDevelopmentFrame(viewport);
 
     }
 

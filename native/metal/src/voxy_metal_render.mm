@@ -594,3 +594,35 @@ Java_me_cortex_voxy_client_core_metal_MetalNative_mtlRenderEncoderSetFragmentByt
         [encoder setFragmentBytes:(const void *)dataAddr length:(NSUInteger)size atIndex:(NSUInteger)index];
     }
 }
+
+// Encodes drawCount indirect indexed draws in one JNI crossing. When baseInstanceSource is non-zero
+// (the CPU-visible contents of the indirect buffer) each draw first pushes its command's baseInstance
+// as 16 bytes at perDrawIndex: Metal's indirect draws do not feed it to the vertex function.
+extern "C" JNIEXPORT void JNICALL
+Java_me_cortex_voxy_client_core_metal_MetalNative_mtlRenderEncoderDrawIndexedPrimitivesIndirectBatch(
+        JNIEnv *, jclass, jlong encoderHandle, jint primitiveType, jint indexType,
+        jlong indexBufferHandle, jlong indexBufferOffset,
+        jlong indirectBufferHandle, jlong baseInstanceSource, jlong offset, jint drawCount, jint stride,
+        jint perDrawIndex) {
+    @autoreleasepool {
+        if (encoderHandle == 0 || indexBufferHandle == 0 || indirectBufferHandle == 0) return;
+        id<MTLRenderCommandEncoder> encoder = voxy_handle_cast<id<MTLRenderCommandEncoder>>(encoderHandle);
+        id<MTLBuffer> indexBuffer = voxy_handle_cast<id<MTLBuffer>>(indexBufferHandle);
+        id<MTLBuffer> indirectBuffer = voxy_handle_cast<id<MTLBuffer>>(indirectBufferHandle);
+        const uint8_t *contents = (const uint8_t *)(uintptr_t)baseInstanceSource;
+        for (jint i = 0; i < drawCount; i++) {
+            NSUInteger command = (NSUInteger)offset + (NSUInteger)i * (NSUInteger)stride;
+            if (contents != nullptr) {
+                uint32_t perDraw[4] = {0, 0, 0, 0};
+                memcpy(perDraw, contents + command + 16, 4);
+                [encoder setVertexBytes:perDraw length:sizeof(perDraw) atIndex:(NSUInteger)perDrawIndex];
+            }
+            [encoder drawIndexedPrimitives:(MTLPrimitiveType)primitiveType
+                                 indexType:(MTLIndexType)indexType
+                               indexBuffer:indexBuffer
+                         indexBufferOffset:(NSUInteger)indexBufferOffset
+                            indirectBuffer:indirectBuffer
+                      indirectBufferOffset:command];
+        }
+    }
+}

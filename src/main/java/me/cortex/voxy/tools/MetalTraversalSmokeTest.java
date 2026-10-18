@@ -81,6 +81,7 @@ public final class MetalTraversalSmokeTest {
                             hiz.buildMipChain(source, 64, 64);
                             (mode.equals("queueFull") ? bounded : traversal).traverse(buffers, hiz.getTexture(), topCount);
                             uploads.tick();
+                            backend.finish();
                             check(buffers, mode);
                         }
                     } finally {

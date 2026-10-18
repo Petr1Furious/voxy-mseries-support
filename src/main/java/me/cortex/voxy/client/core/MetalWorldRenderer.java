@@ -11,6 +11,7 @@ import me.cortex.voxy.client.core.rendering.hierachical.*;
 import me.cortex.voxy.client.core.rendering.section.backend.mdic.MDICViewport;
 import me.cortex.voxy.client.core.rendering.section.geometry.BasicSectionGeometryData;
 import me.cortex.voxy.client.core.rendering.util.*;
+import me.cortex.voxy.client.core.util.FrameTiming;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.common.thread.ServiceManager;
 import me.cortex.voxy.common.world.WorldEngine;
@@ -114,8 +115,10 @@ final class MetalWorldRenderer implements AutoCloseable {
                 geometry.getGeometryBuffer(), geometry.getMetadataBuffer(), encoder -> models.getStore().bind(encoder, 3, 4, 0),
                 () -> {
                     do {
-                        downloads.tick(); nodes.tick(traversal.getNodeBuffer(), cleaner);
-                        cleaner.tick(traversal.getNodeBuffer()); traversal.doTraversal(viewport);
+                        downloads.tick(); FrameTiming.split(backend, "4a downloads");
+                        nodes.tick(traversal.getNodeBuffer(), cleaner); FrameTiming.split(backend, "4b nodes");
+                        cleaner.tick(traversal.getNodeBuffer()); FrameTiming.split(backend, "4c cleaner");
+                        traversal.doTraversal(viewport); FrameTiming.split(backend, "4d traversal");
                     } while (frexStillHasWork());
                 }, fog, fogColor, fade, viewport.fogParameters.environmentalEnd() >= vanillaDistance);
         uploads.tick();

@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.metal;
 
 import me.cortex.voxy.client.core.gpu.*;
+import me.cortex.voxy.client.core.util.FrameTiming;
 import me.cortex.voxy.common.Logger;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,8 +35,55 @@ public class MetalRenderBackend implements RenderBackend {
     @Override
     public int getBufferOffsetAlignment() { return 256; }
 
+    /**
+     * Commits pending work and blocks until every committed command buffer completes.
+     * Use only where the CPU reads GPU results or reuses memory not guarded by a fence.
+     */
     @Override
-    public void finish() { this.submit(); }
+    public void finish() {
+        this.submit();
+        if (FrameTiming.ENABLED && !this.inFlight.isEmpty()) FrameTiming.waits.merge(FrameTiming.submitter(), 1L, Long::sum);
+        while (!this.inFlight.isEmpty()) {
+            long cmdBuffer = this.inFlight.peekFirst();
+            long waitStart = FrameTiming.ENABLED ? System.nanoTime() : 0;
+            MetalNative.mtlCommandBufferWaitUntilCompleted(cmdBuffer);
+            if (FrameTiming.ENABLED) { FrameTiming.submitWaitNs += System.nanoTime() - waitStart; FrameTiming.submitCount++; }
+            this.retire();
+        }
+    }
+
+    /**
+     * Commits pending work and blocks only until it is scheduled on the GPU. Work submitted
+     * afterwards through another API (OpenGL) on the same device is ordered after it, which is
+     * Apple's documented hand-off for IOSurfaces shared between Metal and OpenGL.
+     */
+    public void submitScheduled() {
+        this.submit();
+        if (this.inFlight.isEmpty()) return;
+        long waitStart = FrameTiming.ENABLED ? System.nanoTime() : 0;
+        MetalNative.mtlCommandBufferWaitUntilScheduled(this.inFlight.peekLast());
+        if (FrameTiming.ENABLED) { FrameTiming.submitWaitNs += System.nanoTime() - waitStart; FrameTiming.submitCount++; }
+    }
+
+    /** Releases completed buffers from the head of the queue, surfacing any GPU error. */
+    private void retire() {
+        while (!this.inFlight.isEmpty()) {
+            long cmdBuffer = this.inFlight.peekFirst();
+            int status = MetalNative.mtlCommandBufferGetStatus(cmdBuffer);
+            if (status != MetalNative.MTLCommandBufferStatusCompleted && status != MetalNative.MTLCommandBufferStatusError) return;
+            this.inFlight.pollFirst();
+            if (FrameTiming.ENABLED) {
+                String submitter = this.submitters.remove(cmdBuffer);
+                if (submitter != null) FrameTiming.gpu(submitter, (long) (MetalNative.mtlCommandBufferGPUTime(cmdBuffer) * 1e9));
+            }
+            MetalNative.mtlRelease(cmdBuffer);
+            if (status != MetalNative.MTLCommandBufferStatusCompleted) {
+                throw new RuntimeException("Metal command buffer ended with status=" + status
+                        + " (expected " + MetalNative.MTLCommandBufferStatusCompleted + " = Completed)");
+            }
+        }
+    }
+
     private final long commandQueue;
     private final long sharedEvent;
     private final AtomicLong fenceCounter = new AtomicLong(1);
@@ -61,6 +109,10 @@ public class MetalRenderBackend implements RenderBackend {
      * the fence never signals ahead of the copies it guards.
      */
     private final java.util.ArrayList<Long> pendingFenceSignals = new java.util.ArrayList<>();
+    /** Committed command buffers in queue order, retained until completion is observed. */
+    private final java.util.ArrayDeque<Long> inFlight = new java.util.ArrayDeque<>();
+    /** Profiling only: which code committed each in-flight buffer. */
+    private final java.util.HashMap<Long, String> submitters = new java.util.HashMap<>();
 
     public MetalRenderBackend() {
         if (!MetalNative.load()) {
@@ -141,10 +193,18 @@ public class MetalRenderBackend implements RenderBackend {
         long targetValue = this.fenceCounter.getAndIncrement();
 
         if (this.activeCommandBuffer == 0) {
-            // Queue idle — every commit path on this queue waits for
-            // completion, so all previously requested work is done. CPU-signal
-            // directly instead of burning a command buffer on the event.
-            MetalNative.mtlSharedEventSetSignaledValue(this.sharedEvent, targetValue);
+            this.retire();
+            if (this.inFlight.isEmpty()) {
+                // Queue idle: all previously requested work is done, so CPU-signal
+                // directly instead of burning a command buffer on the event.
+                MetalNative.mtlSharedEventSetSignaledValue(this.sharedEvent, targetValue);
+            } else {
+                // Signal after the committed work; a CPU signal could run ahead of it.
+                long cmdBuffer = MetalNative.mtlCommandQueueNewCommandBuffer(this.commandQueue);
+                MetalNative.mtlCommandBufferEncodeSignalEvent(cmdBuffer, this.sharedEvent, targetValue);
+                MetalNative.mtlCommandBufferCommit(cmdBuffer);
+                this.inFlight.addLast(cmdBuffer);
+            }
         } else if (this.callerPassOpen()) {
             // encodeSignalEvent is illegal while an encoder is open. Only the
             // stream-full emergency paths can land here (fence requested while
@@ -478,7 +538,7 @@ public class MetalRenderBackend implements RenderBackend {
     }
 
     /**
-     * Commit + wait the active buffer so encoded fence signals execute; no-op
+     * Commit the active buffer so encoded fence signals can execute; no-op
      * when a caller still holds a render pass open (committing then would be
      * invalid). Used by the streams' spin-wait/emergency paths, which would
      * otherwise wait forever on a signal parked in the uncommitted buffer.
@@ -507,6 +567,7 @@ public class MetalRenderBackend implements RenderBackend {
     }
 
     public void shutdown() {
+        this.finish();
         MetalNative.mtlRelease(this.sharedEvent);
         MetalNative.mtlRelease(this.commandQueue);
         MetalNative.mtlRelease(this.device);
@@ -850,17 +911,13 @@ public class MetalRenderBackend implements RenderBackend {
             this.pendingFenceSignals.clear();
         }
         this.activeBufferHasBlits = false;
+        // Asynchronous, like glFlush: CPU staging reuse is guarded by fences, and
+        // finish() is the explicit wait for callers that read GPU results.
         MetalNative.mtlCommandBufferCommit(this.activeCommandBuffer);
-        // Sync mode for M3: wait for completion so the smoke test can check status
-        // before the buffer is released. M5+ will move to async + per-frame fences.
-        MetalNative.mtlCommandBufferWaitUntilCompleted(this.activeCommandBuffer);
-        int status = MetalNative.mtlCommandBufferGetStatus(this.activeCommandBuffer);
-        MetalNative.mtlRelease(this.activeCommandBuffer);
+        if (FrameTiming.ENABLED) this.submitters.put(this.activeCommandBuffer, FrameTiming.submitter());
+        this.inFlight.addLast(this.activeCommandBuffer);
         this.activeCommandBuffer = 0;
-        if (status != MetalNative.MTLCommandBufferStatusCompleted) {
-            throw new RuntimeException("Metal command buffer ended with status=" + status
-                    + " (expected " + MetalNative.MTLCommandBufferStatusCompleted + " = Completed)");
-        }
+        this.retire();
     }
 
     @Override

@@ -78,7 +78,7 @@ public final class MetalTriangleSmokeTest {
                 enc.setPipeline(pipeline);
                 enc.draw(RenderEncoder.PRIMITIVE_TRIANGLES, 0, 3, 1, 0);
             }
-            backend.submit();
+            backend.finish();
 
             byte[] pixels = backend.readPixelsRGBA8(target, 0, 0, W, H);
 

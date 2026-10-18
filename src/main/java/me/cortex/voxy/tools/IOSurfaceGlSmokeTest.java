@@ -66,7 +66,7 @@ public final class IOSurfaceGlSmokeTest {
                                 try (var encoder = backend.beginRenderPass(RenderPassDesc.builder(size, size)
                                         .clearColor(bridge.asGpuTexture(), red, 0.6f, 0.9f, 1).build())) {}
                                 // submit waits for Metal completion before GL consumes the shared image.
-                                backend.submit();
+                                backend.finish();
                                 glReadBuffer(GL_COLOR_ATTACHMENT0);
                                 ByteBuffer pixel = stack.malloc(4);
                                 glReadPixels(size / 2, size / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);

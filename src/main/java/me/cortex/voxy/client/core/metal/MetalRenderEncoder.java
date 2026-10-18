@@ -170,60 +170,26 @@ public final class MetalRenderEncoder implements RenderEncoder {
         if (indirectBuf == 0) throw new IllegalArgumentException("drawIndexedIndirect: indirect buffer is null");
         int metalPrimitive = mapPrimitiveType(primitiveType);
 
-        // M13 2026-05-14 workaround: drawIndexedPrimitives:indirectBuffer: does
-        // NOT propagate the indirect args' baseInstance to [[base_instance]]
-        // in the vertex function on Metal. Diagnosed via shader probes —
-        // gl_BaseInstance always reads 0. Push the per-draw baseInstance
-        // value as inline constant bytes at vertex binding 6 via
-        // setVertexBytes before each draw; the shader reads it from the
-        // VoxyMetalPerDrawUBO uniform (gated by VOXY_METAL_BI_FIX).
-        // Requires the indirect buffer to be Shared storage so CPU can
-        // read it (Voxy's MetalRenderBackend.createBuffer uses Shared by
-        // default). Caller must ensure the compute prepass that wrote
-        // drawCallBuffer has been flushed before this draw — Voxy's
-        // submit-and-wait between buildDrawCalls and renderTerrainMetal
-        // handles that on Metal.
-        long indirectContents = 0;
-        if (buffer instanceof MetalBuffer mb) {
-            indirectContents = mb.getContentsPtr();
-        }
-        long perDrawScratchAddr = MemoryUtil.memAddress(this.perDrawScratch);
+        // Metal has no multi-draw-indirect: one native loop encodes drawCount indirect draws.
+        // [[base_instance]] receives each command's baseInstance (MetalBaseInstanceProbe), so
+        // the CPU never reads the GPU-written commands.
         long tFT = me.cortex.voxy.client.core.util.FrameTiming.ENABLED ? System.nanoTime() : 0;
-        for (int i = 0; i < drawCount; i++) {
-            long cmdAddr = offset + (long) i * stride;
-            if (indirectContents != 0) {
-                int baseInstance = MemoryUtil.memGetInt(indirectContents + cmdAddr + 16);
-                MemoryUtil.memPutInt(perDrawScratchAddr, baseInstance);
-                MetalNative.mtlRenderEncoderSetVertexBytes(this.encoderHandle,
-                        perDrawScratchAddr, 16, VOXY_METAL_PER_DRAW_UBO_BINDING);
-            }
-            MetalNative.mtlRenderEncoderDrawIndexedPrimitivesIndirect(this.encoderHandle,
-                    metalPrimitive, this.boundIndexType,
-                    this.boundIndexBuffer, this.boundIndexBufferOffset,
-                    indirectBuf, cmdAddr);
-        }
+        MetalNative.mtlRenderEncoderDrawIndexedPrimitivesIndirectBatch(this.encoderHandle,
+                metalPrimitive, this.boundIndexType, this.boundIndexBuffer, this.boundIndexBufferOffset,
+                indirectBuf, 0, offset, drawCount, stride, 0);
         if (me.cortex.voxy.client.core.util.FrameTiming.ENABLED) {
             me.cortex.voxy.client.core.util.FrameTiming.jniDrawLoopNs += System.nanoTime() - tFT;
             me.cortex.voxy.client.core.util.FrameTiming.jniDrawCount += drawCount;
         }
     }
 
-    /** Scratch buffer for per-draw setVertexBytes uniform (16 bytes std140). */
-    private final java.nio.ByteBuffer perDrawScratch =
-            org.lwjgl.system.MemoryUtil.memAlloc(16).order(java.nio.ByteOrder.nativeOrder());
-
-    /** Vertex-buffer binding slot used by the per-draw baseInstance workaround. */
-    private static final int VOXY_METAL_PER_DRAW_UBO_BINDING = 6;
-
     @Override
     public void drawIndexedIndirectCount(int primitiveType,
                                           IGpuBuffer drawBuffer, long drawOffset,
                                           IGpuBuffer countBuffer, long countOffset,
                                           int maxDrawCount, int stride) {
-        // Current production command buffers use shared memory. The caller must finish
-        // the compute prepass before opening this encoder, also required by the per-draw
-        // baseInstance workaround below. This executes every GPU-generated command;
-        // replacing the host loop with a GPU-populated ICB remains a performance task.
+        // Reads the count on the CPU: the caller must finish the work that wrote it.
+        // Production terrain uses fixed bounds instead (MetalDrawBounds).
         if (!(countBuffer instanceof MetalBuffer counts) || countOffset < 0
                 || countOffset > counts.size() - 4 || maxDrawCount < 0) {
             throw new IllegalArgumentException("Invalid Metal indirect count range");
@@ -261,12 +227,6 @@ public final class MetalRenderEncoder implements RenderEncoder {
         MetalNative.mtlEncoderEndEncoding(this.encoderHandle);
         MetalNative.mtlRelease(this.encoderHandle);
         this.encoderHandle = 0;
-        // Free the per-instance off-heap scratch buffer (MemoryUtil.memAlloc in the
-        // field initializer). It is native memory, NOT GC-tracked, so without this
-        // every render pass leaks 16 bytes that never shows up in JVM heap stats.
-        // The encoderHandle!=0 early-return above makes this run exactly once, so a
-        // double close() cannot double-free.
-        org.lwjgl.system.MemoryUtil.memFree(this.perDrawScratch);
     }
 
     private static long bufferHandle(IGpuBuffer buffer) {

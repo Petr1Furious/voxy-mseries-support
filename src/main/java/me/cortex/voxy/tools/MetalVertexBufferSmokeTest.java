@@ -125,7 +125,7 @@ public final class MetalVertexBufferSmokeTest {
                 enc.bindVertexBuffer(0, vertexBuf, 0);
                 enc.drawIndirect(RenderEncoder.PRIMITIVE_TRIANGLES, indirectBuf, 0, 1, 16);
             }
-            backend.submit();
+            backend.finish();
 
             byte[] pixels = backend.readPixelsRGBA8(target, 0, 0, W, H);
 

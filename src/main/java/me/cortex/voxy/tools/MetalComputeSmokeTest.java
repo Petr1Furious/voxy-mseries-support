@@ -76,7 +76,7 @@ public final class MetalComputeSmokeTest {
                 MetalNative.mtlComputeEncoderSetBuffer(getEncoderHandle(enc), ssboHandle, 0L, 0);
                 enc.dispatch(/*groups*/ 1, 1, 1);
             }
-            backend.submit();
+            backend.finish();
 
             long contents = MetalNative.mtlBufferContents(ssboHandle);
             if (contents == 0) throw new RuntimeException("SSBO contents pointer null");

@@ -13,6 +13,8 @@ public class MDICViewport extends Viewport<MDICViewport> {
     public final IGpuBuffer positionScratchBuffer;
     public final IGpuBuffer indirectLookupBuffer;
     public final IGpuBuffer visibilityBuffer;
+    /** Metal only: how many draws each layer encodes. */
+    public final MetalDrawBounds metalDraws;
     private final RenderBackend backend;
 
     public MDICViewport(RenderProperties properties, int maxSectionCount) {
@@ -32,6 +34,7 @@ public class MDICViewport extends Viewport<MDICViewport> {
             this.indirectLookupBuffer = allocate(backend, HierarchicalOcclusionTraverser.MAX_QUEUE_SIZE * 4L + 4, allocated);
             this.visibilityBuffer = allocate(backend, maxSectionCount * 4L, allocated);
             if (backend != null) this.visibilityBuffer.fill(0);
+            this.metalDraws = backend != null && backend.getType() == me.cortex.voxy.client.core.gpu.BackendType.METAL ? new MetalDrawBounds(backend) : null;
         } catch (RuntimeException | Error failure) {
             for (IGpuBuffer buffer : allocated) buffer.free();
             super.delete0();
@@ -54,6 +57,7 @@ public class MDICViewport extends Viewport<MDICViewport> {
         this.drawCountCallBuffer.free();
         this.drawCallBuffer.free();
         this.positionScratchBuffer.free();
+        if (this.metalDraws != null) this.metalDraws.free();
     }
 
     @Override

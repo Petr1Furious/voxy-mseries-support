@@ -191,12 +191,23 @@ loom {
                 if (project.hasProperty('metalDevBenchmarkProfile')) vmArg "-Dvoxy.dev.benchmarkProfile=${project.property('metalDevBenchmarkProfile')}"
                 if (project.hasProperty('metalDevLodChunks')) vmArg "-Dvoxy.dev.lodChunks=${project.property('metalDevLodChunks')}"
             }
+            if (project.hasProperty('metalDevPerf')) {
+                vmArg '-Dvoxy.dev.perf=true'
+                vmArg "-Dvoxy.dev.perfLabel=${project.property('metalDevPerf')}"
+                if (project.hasProperty('metalDevPerfSplit')) vmArg '-Dvoxy.dev.perfSplit=true'
+                if (project.hasProperty('metalDevJvmArgs')) project.property('metalDevJvmArgs').toString().split(' ').each { vmArg it }
+            }
+            if (project.hasProperty('metalDevPerfPrepare')) {
+                vmArg '-Dvoxy.dev.world=true'
+                vmArg "-Dvoxy.dev.perfPrepare=${project.property('metalDevPerfPrepare')}"
+                vmArg "-Dvoxy.dev.newWorldName=${project.findProperty('metalDevNewWorldName') ?: 'perf-bench'}"
+            }
             if (project.hasProperty('metalDevPreparation')) {
                 vmArg '-Dvoxy.dev.preparation=true'
                 vmArg '-Dchunky.maxWorkingCount=8'
             }
             vmArg '--enable-native-access=ALL-UNNAMED'
-            vmArg '-Xmx1536m'
+            vmArg "-Xmx${project.findProperty('metalDevHeap') ?: '1536m'}"
             vmArg "-Dvoxy.shaderCacheDir=${file('build/metal-shader-cache').absolutePath}"
         }
     }
@@ -285,7 +296,7 @@ dependencies {
     smartDependency("modmenu_version", true)
     smartDependency("lithium_version", true)
     smartDependency("iris_version")
-    smartDependency("chunky_version", project.hasProperty("metalDevPreparation"))
+    smartDependency("chunky_version", project.hasProperty("metalDevPreparation") || project.hasProperty("metalDevPerfPrepare"))
     smartDependency("vivecraft_version")
     smartDependency("flashback_version")
     smartDependency("nvidium_version")
@@ -410,12 +421,12 @@ tasks.register('buildMetalNative', Exec) {
 
 processResources.dependsOn tasks.named('buildMetalNative')
 
-['MetalRenderBackend', 'MetalTriangle', 'MetalCompute', 'MetalVertexBuffer', 'MetalIcb', 'IOSurfaceBridge', 'IOSurfaceGl', 'Voxy26Compute', 'MetalStreams', 'MetalGeometry', 'MetalNodeUploads', 'MetalModelTextures', 'MetalNodeCleaner', 'MetalRawReadback', 'MetalHiZ', 'MetalTraversal', 'MetalViewport', 'MetalMDIC', 'MetalTerrain', 'MetalBounds', 'MetalTerrainIOSurface', 'MetalFrameBridge', 'MetalSsao', 'MetalMDICCapacity', 'MetalFrameFlow'].each { testName ->
+['MetalRenderBackend', 'MetalTriangle', 'MetalCompute', 'MetalVertexBuffer', 'MetalIcb', 'IOSurfaceBridge', 'IOSurfaceGl', 'Voxy26Compute', 'MetalStreams', 'MetalGeometry', 'MetalNodeUploads', 'MetalModelTextures', 'MetalNodeCleaner', 'MetalRawReadback', 'MetalHiZ', 'MetalTraversal', 'MetalViewport', 'MetalMDIC', 'MetalTerrain', 'MetalBounds', 'MetalTerrainIOSurface', 'MetalFrameBridge', 'MetalSsao', 'MetalMDICCapacity', 'MetalFrameFlow', 'MetalInteropOrdering', 'MetalBaseInstanceProbe'].each { testName ->
     tasks.register("test${testName}", JavaExec) {
         group = 'verification'
         dependsOn classes
         classpath = sourceSets.main.runtimeClasspath
-        mainClass = "me.cortex.voxy.tools.${testName}SmokeTest"
+        mainClass = testName.endsWith("Probe") ? "me.cortex.voxy.tools.${testName}" : "me.cortex.voxy.tools.${testName}SmokeTest"
         jvmArgs '--enable-native-access=ALL-UNNAMED', '-Xmx512m'
         systemProperty 'voxy.shaderCacheDir', file('build/metal-shader-cache').absolutePath
     }

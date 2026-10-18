@@ -79,7 +79,7 @@ public final class IOSurfaceBridgeSmokeTest {
             try (var enc = backend.beginRenderPass(pass)) {
                 // No draws — the clear load action is enough to write all pixels.
             }
-            backend.submit();
+            backend.finish();
 
             byte[] pixels = backend.readPixelsRGBA8(bridge.asGpuTexture(), 0, 0, W, H);
             int got = ((pixels[0] & 0xFF) << 24) | ((pixels[1] & 0xFF) << 16)

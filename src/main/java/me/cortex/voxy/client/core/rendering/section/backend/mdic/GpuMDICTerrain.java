@@ -37,7 +37,6 @@ public final class GpuMDICTerrain implements AutoCloseable {
         if (useVanillaMask) defines.put("VOXY_VANILLA_MASK", "1");
         if (backend.getType() == BackendType.METAL) {
             defines.put("VOXY_METAL", "1");
-            defines.put("VOXY_METAL_BI_FIX", "1");
         }
         IGpuPipeline first = null, second = null;
         IGpuSampler light = null, depth = null;
@@ -84,8 +83,6 @@ public final class GpuMDICTerrain implements AutoCloseable {
         if (useVanillaMask && (vanillaDepth == null || vanillaDepth.getWidth() != viewport.width || vanillaDepth.getHeight() != viewport.height)) {
             throw new IllegalStateException("Terrain requires the current viewport's vanilla depth mask");
         }
-        // The Metal host loop consumes shared counts and baseInstance values.
-        backend.finish();
         try (var encoder = backend.beginRenderPass(pass)) {
             encoder.setViewport(0, 0, viewport.width, viewport.height, 0, 1);
             encoder.setScissor(0, 0, viewport.width, viewport.height);
@@ -113,8 +110,14 @@ public final class GpuMDICTerrain implements AutoCloseable {
                 case TEMPORAL -> GpuMDICCapacity.TEMPORAL;
                 case TRANSLUCENT -> GpuMDICCapacity.TRANSLUCENT;
             };
-            encoder.drawIndexedIndirectCount(RenderEncoder.PRIMITIVE_TRIANGLES, viewport.drawCallBuffer, drawOffset,
-                    viewport.drawCountCallBuffer, countOffset, limit, 20);
+            if (viewport.metalDraws != null) {
+                // GPU-padded to the bounds of the build that generated these commands; see MetalDrawBounds.
+                int draws = viewport.metalDraws.bound(switch (layer) { case OPAQUE -> 0; case TRANSLUCENT -> 1; case TEMPORAL -> 2; });
+                if (draws > 0) encoder.drawIndexedIndirect(RenderEncoder.PRIMITIVE_TRIANGLES, viewport.drawCallBuffer, drawOffset, draws, 20);
+            } else {
+                encoder.drawIndexedIndirectCount(RenderEncoder.PRIMITIVE_TRIANGLES, viewport.drawCallBuffer, drawOffset,
+                        viewport.drawCountCallBuffer, countOffset, limit, 20);
+            }
         }
     }
 

@@ -270,6 +270,12 @@ public final class MetalNative {
 
     /** Gets the command buffer status (0=notEnqueued, 1=enqueued, 2=committed, 3=scheduled, 4=completed, 5=error). */
     public static native int mtlCommandBufferGetStatus(long cmdBuffer);
+    public static native double mtlCommandBufferGPUTime(long cmdBuffer);
+    public static native void mtlCommandBufferWaitUntilScheduled(long cmdBuffer);
+    /** drawCount indirect indexed draws in one call; baseInstanceSource 0 skips the per-draw baseInstance push. */
+    public static native void mtlRenderEncoderDrawIndexedPrimitivesIndirectBatch(long encoder, int primitiveType, int indexType,
+            long indexBuffer, long indexBufferOffset, long indirectBuffer, long baseInstanceSource, long offset,
+            int drawCount, int stride, int perDrawIndex);
 
     /**
      * Creates a blit command encoder (for copy/fill operations).
