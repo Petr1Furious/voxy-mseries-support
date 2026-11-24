@@ -30,6 +30,19 @@ Same scene, same build each time, alternating `-Dvoxy.metal.syncDraws=true` (the
 
 Voxy no longer stalls the render thread, but frame rate barely moves: the time now goes to the OpenGL buffer swap (see "Remaining costs").
 
+### Third round (2026-11-14): presenting through Metal (default on macOS, `-Dvoxy.metal.present=false` turns it off)
+
+Same scene, macOS 27.2, one Voxy-on pass of 6 s per camera:
+
+| Build | Horizon camera | Overview camera |
+| --- | --- | --- |
+| OpenGL presentation | 114–117 fps | 90–94 fps |
+| Metal presentation | 134–153 fps | 120–125 fps |
+| OpenGL presentation, + 5 ms CPU load | 67–72 fps | 65–68 fps |
+| Metal presentation, + 5 ms CPU load | 130 fps | 125 fps |
+
+With Metal presentation, 5 ms of extra CPU work per frame costs almost nothing: CPU and GPU frames now overlap.
+
 ## What changed
 
 1. **`MetalRenderBackend.submit()` no longer waits.** It commits the command buffer and tracks it, as `glFlush` does on the GL backend. Staging memory is already guarded by fences. `finish()` remains the explicit CPU wait, and GPU errors are reported when the buffers retire. Per-frame waits fell from 7 to 1.
@@ -38,6 +51,10 @@ Voxy no longer stalls the render thread, but frame rate barely moves: the time n
 4. **One JNI call per draw layer.** Previously each indirect draw cost two JNI crossings (~5.5k draws per frame); now a single native loop encodes them all.
 5. **The opaque pass is committed as soon as it is encoded**, so the GPU starts the frame's largest pass while the CPU encodes Hi-Z and traversal.
 6. **No CPU readback of the generated draw commands.** The port assumed Metal's indirect draws do not pass `baseInstance` to `[[base_instance]]`, so the CPU read every command and pushed the value per draw. `testMetalBaseInstanceProbe` shows that they do (M1 Pro, macOS 26), so the terrain shader reads `gl_BaseInstance` directly. Metal still has no draw count from a buffer: `MetalDrawBounds` encodes, per layer, 1.5× the largest count of the last 8 frames plus 1,024 draws, and `metal_pad.comp` turns commands between the generated count and that bound into empty draws. A viewport's first build waits for exact counts; `-Dvoxy.metal.syncDraws=true` waits every frame.
+
+7. **Metal presentation (default on macOS).** Writing OpenGL's window framebuffer makes the following `glFlush` or swap block until the GPU has finished the frame. A GL flush that only writes an IOSurface does not block. On macOS, unless `-Dvoxy.metal.present=false` is set, `MixinGlSurface` replaces `GlSurface`'s blit to the window and its swap. `MetalPresenter` copies the finished frame into one of three IOSurfaces, flushes GL, and a Metal blit presents it on a `CAMetalLayer` over the window's content view. Vsync maps to `displaySyncEnabled`.
+
+8. **Geometry memory sized from the device.** The port allocated a fixed 256 MiB for LOD geometry, half of upstream's 512 MiB minimum. In a dense world (Greenfield, subdivision 64) usage sat at the eviction threshold (189–208 MiB, 1,353 cleanup passes), so nearby LODs stayed coarse. It is now an eighth of `recommendedMaxWorkingSetSize`, clamped to 512 MiB–2 GiB: 1,515 MiB on a 16 GB M1 Pro. That world then held 565 MiB at the overview camera with no cleanup passes. Showing that detail costs frame rate there: 54 → 36 fps (overview), with horizon unchanged at 75 fps. `-Dvoxy.geometryBufferSizeOverrideMB` overrides the size, as upstream.
 
 ## Correctness checks
 
@@ -53,6 +70,8 @@ Screenshots with and without the readback differ in 1.6–2.9% of pixels, nearly
 
 In-game screenshots before and after match at both cameras.
 
+Metal presentation was checked on screen with `-Dvoxy.dev.perfWindowTest=true`, which steps through resize, fullscreen, windowed, minimize, restore and vsync after the benchmark. Every state rendered correctly. A screenshot of the window matched the OpenGL path within 0.11 levels per channel on average, with 0.22% of pixels differing by more than 8 levels.
+
 ## Measured but not kept
 
 - **Attributes on the provoking vertex only, as on GL.** This was correct (Metal uses the first vertex), but made no difference, because of SIMD divergence.
@@ -63,8 +82,8 @@ In-game screenshots before and after match at both cameras.
 
 ## Remaining costs
 
-- **The OpenGL buffer swap waits for the GPU to finish the frame.** A sample of the render thread shows ~40% of its time in `CGLFlushDrawable` → `GLDContextRec::flushContext` (a semaphore wait). macOS's OpenGL does not let the CPU start the next frame while the GPU finishes this one, even with Voxy disabled (5 ms of CPU load costs vanilla the full 5 ms). Frame time is therefore about Minecraft's CPU work plus the frame's GPU time, and removing CPU work from Voxy mostly moves the wait into the swap. Avoiding this would need presenting through Metal instead of the OpenGL swap.
-- **GPU time per frame**, now the limit: about 8.5 ms at the horizon camera and 11 ms at the overview camera. The opaque terrain pass is the largest part (3.5–4.5 ms, vertex-bound, ~1.4M quads); the visibility raster is also significant (see above).
+- **With OpenGL presentation, writing the window framebuffer serializes CPU and GPU.** About 40% of the render thread is spent in `GLDContextRec::flushContext` (a semaphore wait), even with Voxy disabled (5 ms of CPU load costs vanilla the full 5 ms). Skipping only the swap does not help: the next `glFlush` blocks the same way. An offscreen GL context queued ten flushed batches without blocking. Metal presentation (step 7) removes this.
+- **GPU time per frame.** It was previously estimated at 8.5–11 ms, but most of that was the wait above. With Metal presentation, the horizon camera reaches 134–153 fps and overview 120–125 fps. The opaque terrain pass is the largest part (3.5–4.5 ms, vertex-bound, ~1.4M quads).
 - **LOD subdivision is measured in framebuffer pixels.** Retina displays therefore get roughly twice the LOD detail per axis of a standard display. Subdivision 128 (about 64 points on a 2× display) drew 29% fewer quads: 95–104 fps horizon, 83 fps overview, measured before step 4. This is a user setting, not a default change.
 
 ## Reproducing
@@ -79,6 +98,8 @@ caffeinate -dimsu ./gradlew runMetalClient -PmetalDevExistingWorld=perf-bench -P
 The report is written to `run-metal-263/perf-benchmark/`. Optional flags:
 
 - `-PmetalDevPerfSplit` commits after every frame stage, for per-stage GPU time (profiling only).
+- `-Dvoxy.dev.perfSeconds=6 -Dvoxy.dev.perfPasses=on` shortens a run to one Voxy-on pass (default `on,off,on`, 12 s each).
+- `-Dvoxy.dev.perfWindowTest=true` steps through window states after the report, for checking presentation on screen.
 - `-PmetalDevJvmArgs="-Dvoxy.dev.perfSpinDeg=6 -Dvoxy.dev.perfCpuLoadMs=5 -Dvoxy.dev.perfSubdiv=128 -Dvoxy.dev.perfVanillaChunks=12 -Dvoxy.dev.perfWidth=1280 -Dvoxy.dev.perfHeight=800"`
 
 Keep the display awake (`caffeinate`): if it sleeps, Minecraft blocks in the buffer swap.

@@ -49,6 +49,15 @@ Java_me_cortex_voxy_client_core_metal_MetalNative_mtlDeviceMaxBufferLength(
     }
 }
 
+extern "C" JNIEXPORT jlong JNICALL
+Java_me_cortex_voxy_client_core_metal_MetalNative_mtlDeviceRecommendedMaxWorkingSetSize(
+        JNIEnv *, jclass, jlong deviceHandle) {
+    @autoreleasepool {
+        if (deviceHandle == 0) return 0;
+        return (jlong)[voxy_handle_cast<id<MTLDevice>>(deviceHandle) recommendedMaxWorkingSetSize];
+    }
+}
+
 extern "C" JNIEXPORT jboolean JNICALL
 Java_me_cortex_voxy_client_core_metal_MetalNative_mtlDeviceSupportsFamily(
         JNIEnv *, jclass, jlong deviceHandle, jint family) {

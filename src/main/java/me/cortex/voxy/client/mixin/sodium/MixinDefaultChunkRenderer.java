@@ -19,6 +19,9 @@ import net.caffeinemc.mods.sodium.client.render.chunk.vertex.format.ChunkVertexT
 import net.caffeinemc.mods.sodium.client.render.viewport.CameraTransform;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.minecraft.client.renderer.oit.OitStage;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -41,14 +44,17 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
     @Inject(method = "render", at = @At(value = "HEAD"), cancellable = true)
     private void voxy$cancelThingie(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, RenderPass pass, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, OitStage stage, CallbackInfo ci) {
         if (VoxyClient.disableSodiumChunkRender()) {
-            super.begin(renderPass, parameters, terrainSampler, stage);
+            this.voxy$beginEnd(true, renderPass, parameters, terrainSampler, stage);
             this.doRender(matrices, renderPass, camera, parameters);
-            super.end(renderPass);
+            this.voxy$beginEnd(false, renderPass, parameters, terrainSampler, stage);
             ci.cancel();
         }
     }
 
-    @Inject(method = "render", at = @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE))
+    @Inject(method = "render", at = {
+            @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end()V", shift = At.Shift.BEFORE),
+            @At(value = "INVOKE", target = "Lnet/caffeinemc/mods/sodium/client/render/chunk/ShaderChunkRenderer;end(Lnet/caffeinemc/mods/sodium/client/render/chunk/terrain/TerrainRenderPass;)V", shift = At.Shift.BEFORE)
+    })
     private void voxy$injectRender(ChunkRenderMatrices matrices, ChunkRenderListIterable renderLists, TerrainRenderPass renderPass, CameraTransform camera, FogParameters parameters, boolean indexedRenderingEnabled, RenderPass pass, GpuSampler terrainSampler, GpuBufferSlice uniformData, GpuBuffer sectionTimeInfo, OitStage stage, CallbackInfo ci) {
         this.doRender(matrices, renderPass, camera, parameters);
     }
@@ -58,6 +64,38 @@ public abstract class MixinDefaultChunkRenderer extends ShaderChunkRenderer {
         var renderer = IVoxyRenderSystemHolder.getNullable();
         if (renderer != null) {
             this.shouldDraw[DefaultTerrainRenderPasses.getPassIndex(DefaultTerrainRenderPasses.CUTOUT)] = true;
+        }
+    }
+
+    // Sodium 0.9.3-beta.5 changed these to begin(pass, stage) and end(); older betas take more arguments.
+    @Unique
+    private static MethodHandle voxy$begin, voxy$end;
+    @Unique
+    private static boolean voxy$legacy;
+
+    @Unique
+    private void voxy$beginEnd(boolean begin, TerrainRenderPass renderPass, FogParameters parameters, GpuSampler sampler, OitStage stage) {
+        try {
+            if (voxy$begin == null) {
+                var lookup = MethodHandles.lookup();
+                try {
+                    voxy$end = lookup.findVirtual(ShaderChunkRenderer.class, "end", MethodType.methodType(void.class));
+                    voxy$begin = lookup.findVirtual(ShaderChunkRenderer.class, "begin", MethodType.methodType(void.class, TerrainRenderPass.class, OitStage.class));
+                } catch (NoSuchMethodException e) {
+                    voxy$legacy = true;
+                    voxy$end = lookup.findVirtual(ShaderChunkRenderer.class, "end", MethodType.methodType(void.class, TerrainRenderPass.class));
+                    voxy$begin = lookup.findVirtual(ShaderChunkRenderer.class, "begin", MethodType.methodType(void.class, TerrainRenderPass.class, FogParameters.class, GpuSampler.class, OitStage.class));
+                }
+            }
+            if (begin) {
+                if (voxy$legacy) voxy$begin.invoke((ShaderChunkRenderer) this, renderPass, parameters, sampler, stage);
+                else voxy$begin.invoke((ShaderChunkRenderer) this, renderPass, stage);
+            } else {
+                if (voxy$legacy) voxy$end.invoke((ShaderChunkRenderer) this, renderPass);
+                else voxy$end.invoke((ShaderChunkRenderer) this);
+            }
+        } catch (Throwable t) {
+            throw new RuntimeException(t);
         }
     }
 

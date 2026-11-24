@@ -23,3 +23,10 @@
 *.jfr
 *.hprof
 .DS_Store
+
+# Eclipse / VS Code Java metadata
+/.classpath
+/.project
+/.settings/
+/bin/
+/native/metal/build*/

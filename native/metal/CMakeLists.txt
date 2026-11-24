@@ -39,7 +39,8 @@ set(VOXY_METAL_SOURCES
     src/voxy_metal_compute.mm
     src/voxy_metal_icb.mm
     src/voxy_metal_iosurface.mm
-    src/voxy_metal_iosurface_gl.mm)
+    src/voxy_metal_iosurface_gl.mm
+    src/voxy_metal_present.mm)
 
 add_library(voxy_metal SHARED ${VOXY_METAL_SOURCES})
 
@@ -68,6 +69,7 @@ find_library(QUARTZCORE_FRAMEWORK QuartzCore REQUIRED)
 find_library(IOSURFACE_FRAMEWORK IOSurface REQUIRED)
 find_library(COREGRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
 find_library(OPENGL_FRAMEWORK OpenGL REQUIRED)
+find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
 
 target_link_libraries(voxy_metal PRIVATE
     ${METAL_FRAMEWORK}
@@ -75,7 +77,8 @@ target_link_libraries(voxy_metal PRIVATE
     ${QUARTZCORE_FRAMEWORK}
     ${IOSURFACE_FRAMEWORK}
     ${COREGRAPHICS_FRAMEWORK}
-    ${OPENGL_FRAMEWORK})
+    ${OPENGL_FRAMEWORK}
+    ${APPKIT_FRAMEWORK})
 
 # Install to the resources folder so Java can System.loadLibrary from jar or dev run.
 set(VOXY_LIB_OUTPUT "${CMAKE_SOURCE_DIR}/../../src/main/resources/natives/macos-arm64")

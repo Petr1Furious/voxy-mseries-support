@@ -37,7 +37,8 @@ public final class MetalPerfBenchmark {
 
     private static List<Phase> phases() {
         var list = new ArrayList<Phase>();
-        for (boolean voxy : new boolean[]{true, false, true}) {
+        for (String pass : System.getProperty("voxy.dev.perfPasses", "on,off,on").split(",")) {
+            boolean voxy = pass.equals("on");
             for (int i = 0; i < CAMERAS.length; i++) {
                 list.add(new Phase(CAMERAS[i], voxy, i == 0 ? (voxy ? 30 : 10) : 8));
             }
@@ -84,7 +85,7 @@ public final class MetalPerfBenchmark {
             startPhase(client);
             return;
         }
-        if (phase >= PHASES.size()) return;
+        if (phase >= PHASES.size()) { windowTest(client); return; }
         double seconds = (System.nanoTime() - phaseStart) / 1e9;
         int warmup = PHASES.get(phase).warmupSeconds;
         if (!collecting && seconds >= warmup && seconds < warmup + MEASURE_SECONDS) {
@@ -111,7 +112,30 @@ public final class MetalPerfBenchmark {
             Logger.info("Metal perf benchmark report " + file);
         } catch (java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
         Logger.info("Metal perf benchmark completed");
-        client.stop();
+        if (!WINDOW_TEST) client.stop();
+        else windowStepStart = System.nanoTime();
+    }
+
+    /** After the report, steps through window states for presentation checks; each step is logged and held 5 s. */
+    private static final boolean WINDOW_TEST = Boolean.getBoolean("voxy.dev.perfWindowTest");
+    private static final String[] WINDOW_STEPS = {"resized 1200x750", "fullscreen", "windowed", "minimized", "restored", "vsync"};
+    private static int windowStep = -1;
+    private static long windowStepStart;
+
+    private static void windowTest(Minecraft client) {
+        if (!WINDOW_TEST || System.nanoTime() - windowStepStart < 5_000_000_000L) return;
+        windowStepStart = System.nanoTime();
+        if (++windowStep >= WINDOW_STEPS.length) { client.stop(); return; }
+        long handle = client.getWindow().handle();
+        switch (windowStep) {
+            case 0 -> org.lwjgl.sdl.SDLVideo.SDL_SetWindowSize(handle, 1200, 750);
+            case 1 -> client.options.fullscreen().set(true);
+            case 2 -> client.options.fullscreen().set(false);
+            case 3 -> org.lwjgl.sdl.SDLVideo.SDL_MinimizeWindow(handle);
+            case 4 -> org.lwjgl.sdl.SDLVideo.SDL_RestoreWindow(handle);
+            case 5 -> client.options.enableVsync().set(true);
+        }
+        Logger.info("Window test step: " + WINDOW_STEPS[windowStep]);
     }
 
     private static void startPhase(Minecraft client) {

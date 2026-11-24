@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core;
 
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.config.VoxyConfig;
+import me.cortex.voxy.client.core.metal.MetalNative;
 import me.cortex.voxy.client.core.metal.MetalRenderBackend;
 import me.cortex.voxy.client.core.model.*;
 import me.cortex.voxy.client.core.rendering.*;
@@ -57,7 +58,7 @@ final class MetalWorldRenderer implements AutoCloseable {
             catch (RuntimeException | Error failure) { store.free(); throw failure; }
             generation = new RenderGenerationService(world, models, services, false);
             int sections = 1 << 17;
-            geometry = new BasicSectionGeometryData(backend, sections, 256L << 20); resources.add(geometry::free);
+            geometry = new BasicSectionGeometryData(backend, sections, geometryCapacity(backend)); resources.add(geometry::free);
             nodes = new AsyncNodeManager(1 << 19, geometry, generation, backend, uploads);
             cleaner = new NodeCleaner(nodes, backend, uploads, downloads); resources.add(cleaner::free);
             traversal = new HierarchicalOcclusionTraverser(nodes, cleaner, generation, backend, uploads, downloads);
@@ -81,11 +82,19 @@ final class MetalWorldRenderer implements AutoCloseable {
             world.getMapper().setBiomeCallback(models::addBiome);
             world.setDirtyCallback(nodes::worldEvent);
             nodes.start();
-            Logger.info("Voxy Metal world renderer created: 256 MiB geometry, 128 MiB CPU geometry cache");
+            Logger.info("Voxy Metal world renderer created: " + (geometry.getGeometryCapacityBytes() >> 20) + " MiB geometry, 128 MiB CPU geometry cache");
         } catch (RuntimeException | Error failure) {
             try { close(); } catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
             throw failure;
         }
+    }
+
+    /** Geometry lives in unified memory, so it is sized from the device's working-set budget rather than free VRAM. */
+    private static long geometryCapacity(MetalRenderBackend backend) {
+        var override = System.getProperty("voxy.geometryBufferSizeOverrideMB", "");
+        if (!override.isEmpty()) return Long.parseLong(override) << 20;
+        long budget = MetalNative.mtlDeviceRecommendedMaxWorkingSetSize(backend.device());
+        return Math.clamp(budget / 8, 512L << 20, 2048L << 20);
     }
 
     void render(Viewport<?> viewport, int depth, int color) {

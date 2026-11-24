@@ -118,7 +118,8 @@ processResources {
             sodium_versions_builder.append("\"=").append(sodium_version).append("\"");
         } else {
             sodium_version = sodium_version.split("-")[0]
-            sodium_versions_builder.append("\">=").append(sodium_version).append("- <=").append(sodium_version).append("\"")
+            var minimum = project.findProperty("sodium_min_version") ?: sodium_version + "-"
+            sodium_versions_builder.append("\">=").append(minimum).append(" <=").append(sodium_version).append("\"")
         }
         sodium_versions_builder.append("]");
         sodium_versions = sodium_versions_builder.toString();

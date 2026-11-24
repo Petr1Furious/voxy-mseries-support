@@ -115,6 +115,7 @@ public final class MetalNative {
 
     /** Gets the maximum buffer length supported by the device. */
     public static native long mtlDeviceMaxBufferLength(long device);
+    public static native long mtlDeviceRecommendedMaxWorkingSetSize(long device);
 
     /** Checks if the device supports a specific GPU family (e.g., Apple7, Apple8). */
     public static native boolean mtlDeviceSupportsFamily(long device, int family);
@@ -270,6 +271,13 @@ public final class MetalNative {
 
     /** Gets the command buffer status (0=notEnqueued, 1=enqueued, 2=committed, 3=scheduled, 4=completed, 5=error). */
     public static native int mtlCommandBufferGetStatus(long cmdBuffer);
+
+    /** CAMetalLayer over the NSWindow's content view; see MetalPresenter. */
+    public static native long mtlPresentLayerCreate(long device, long nsWindow);
+    public static native void mtlPresentLayerConfigure(long layer, long nsWindow, int width, int height, boolean vsync);
+    /** Copies {@code texture} into the next drawable and presents it; returns the retained command buffer, or 0. */
+    public static native long mtlPresentLayerPresent(long layer, long queue, long texture);
+    public static native void mtlPresentLayerDestroy(long layer);
     public static native double mtlCommandBufferGPUTime(long cmdBuffer);
     public static native void mtlCommandBufferWaitUntilScheduled(long cmdBuffer);
     /** drawCount indirect indexed draws in one call; baseInstanceSource 0 skips the per-draw baseInstance push. */
